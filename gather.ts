@@ -150,4 +150,10 @@ const main = async (filename: string = "") => {
   })
 }
 
-main("market_maker_data.json");
+// Export main function for CLI usage
+export { main };
+
+// Only run if this file is executed directly (not imported)
+if (require.main === module) {
+  main("market_maker_data.json");
+}

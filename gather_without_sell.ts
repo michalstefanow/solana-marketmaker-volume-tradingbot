@@ -1,21 +1,19 @@
 import base58 from "bs58"
-import { readJson, retrieveEnvVariable, sleep } from "./utils"
+import { readJson, sleep } from "./utils"
 import { ComputeBudgetProgram, Connection, Keypair, SystemProgram, Transaction, TransactionInstruction, sendAndConfirmTransaction } from "@solana/web3.js"
 import { TOKEN_PROGRAM_ID, createAssociatedTokenAccountIdempotentInstruction, createCloseAccountInstruction, createTransferCheckedInstruction, getAssociatedTokenAddress } from "@solana/spl-token";
 import { SPL_ACCOUNT_LAYOUT, TokenAccount } from "@raydium-io/raydium-sdk";
 import { getSellTxWithJupiter } from "./utils/swapOnlyAmm";
 import { execute } from "./executor/legacy";
-import { RPC_ENDPOINT, RPC_WEBSOCKET_ENDPOINT } from "./constants";
+import { RPC_ENDPOINT, RPC_WEBSOCKET_ENDPOINT, PRIVATE_KEY } from "./constants";
 import fs from 'fs'
 
 export const solanaConnection = new Connection(RPC_ENDPOINT, {
   wsEndpoint: RPC_WEBSOCKET_ENDPOINT, commitment: "processed"
 })
 
-const rpcUrl = retrieveEnvVariable("RPC_ENDPOINT");
-const mainKpStr = retrieveEnvVariable('PRIVATE_KEY');
-const connection = new Connection(rpcUrl, { commitment: "processed" });
-const mainKp = Keypair.fromSecretKey(base58.decode(mainKpStr))
+const connection = new Connection(RPC_ENDPOINT, { commitment: "processed" });
+const mainKp = Keypair.fromSecretKey(base58.decode(PRIVATE_KEY))
 
 const main = async () => {
 
@@ -117,4 +115,10 @@ const walletsData = JSON.parse(data);
   })
 }
 
-main()
+// Export main function for CLI usage
+export { main };
+
+// Only run if this file is executed directly (not imported)
+if (require.main === module) {
+  main();
+}

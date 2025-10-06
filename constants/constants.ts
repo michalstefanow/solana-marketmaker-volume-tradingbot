@@ -1,34 +1,34 @@
 import { PublicKey } from "@solana/web3.js"
-import { retrieveEnvVariable } from "../utils"
+import { config } from "../utils/config-manager"
 
-export const PRIVATE_KEY = retrieveEnvVariable('PRIVATE_KEY')
-export const RPC_ENDPOINT = retrieveEnvVariable('RPC_ENDPOINT')
-export const RPC_WEBSOCKET_ENDPOINT = retrieveEnvVariable('RPC_WEBSOCKET_ENDPOINT')
+export const PRIVATE_KEY = config.PRIVATE_KEY
+export const RPC_ENDPOINT = config.RPC_ENDPOINT
+export const RPC_WEBSOCKET_ENDPOINT = config.RPC_WEBSOCKET_ENDPOINT
 
-export const DISTRIBUTE_INTERVAL_MAX = Number(retrieveEnvVariable('DISTRIBUTE_INTERVAL_MAX'))
-export const DISTRIBUTE_INTERVAL_MIN = Number(retrieveEnvVariable('DISTRIBUTE_INTERVAL_MIN'))
+export const DISTRIBUTE_INTERVAL_MAX = config.DISTRIBUTE_INTERVAL_MAX
+export const DISTRIBUTE_INTERVAL_MIN = config.DISTRIBUTE_INTERVAL_MIN
 
-export const BUY_UPPER_PERCENT = Number(retrieveEnvVariable('BUY_UPPER_PERCENT'))
-export const BUY_LOWER_PERCENT = Number(retrieveEnvVariable('BUY_LOWER_PERCENT'))
+export const BUY_UPPER_PERCENT = config.BUY_UPPER_PERCENT
+export const BUY_LOWER_PERCENT = config.BUY_LOWER_PERCENT
 
-export const BUY_INTERVAL_MIN = Number(retrieveEnvVariable('BUY_INTERVAL_MIN'))
-export const BUY_INTERVAL_MAX = Number(retrieveEnvVariable('BUY_INTERVAL_MAX'))
+export const BUY_INTERVAL_MIN = config.BUY_INTERVAL_MIN
+export const BUY_INTERVAL_MAX = config.BUY_INTERVAL_MAX
 
-export const SELL_INTERVAL_MIN = Number(retrieveEnvVariable('SELL_INTERVAL_MIN'))
-export const SELL_INTERVAL_MAX = Number(retrieveEnvVariable('SELL_INTERVAL_MAX'))
+export const SELL_INTERVAL_MIN = config.SELL_INTERVAL_MIN
+export const SELL_INTERVAL_MAX = config.SELL_INTERVAL_MAX
 
-export const DISTRIBUTE_WALLET_NUM = Number(retrieveEnvVariable('DISTRIBUTE_WALLET_NUM'))
-export const SOL_AMOUNT_TO_DISTRIBUTE = Number(retrieveEnvVariable('SOL_AMOUNT_TO_DISTRIBUTE'))
+export const DISTRIBUTE_WALLET_NUM = config.DISTRIBUTE_WALLET_NUM
+export const SOL_AMOUNT_TO_DISTRIBUTE = config.SOL_AMOUNT_TO_DISTRIBUTE
 
-export const JITO_MODE = retrieveEnvVariable('JITO_MODE') === 'true'
-export const JITO_FEE = Number(retrieveEnvVariable('JITO_FEE'))
+export const JITO_MODE = config.JITO_MODE
+export const JITO_FEE = config.JITO_FEE
 
-export const SLIPPAGE = Number(retrieveEnvVariable('SLIPPAGE'))
+export const SLIPPAGE = config.SLIPPAGE
 
-export const FEE_LEVEL = Number(retrieveEnvVariable('FEE_LEVEL'))
+export const FEE_LEVEL = config.FEE_LEVEL
 
-export const TOKEN_MINT = retrieveEnvVariable('TOKEN_MINT')
-export const POOL_ID = retrieveEnvVariable('POOL_ID')
+export const TOKEN_MINT = config.TOKEN_MINT
+export const POOL_ID = config.POOL_ID
 
 
 // airdrop part
@@ -41,8 +41,8 @@ export const POOL_ID = retrieveEnvVariable('POOL_ID')
 
 
 // gather part
-export const GATHER_TO_OTHER_ADDRESS = retrieveEnvVariable('GATHER_TO_OTHER_ADDRESS') === 'true'
-export const GATHER_ADDRESS = retrieveEnvVariable('GATHER_ADDRESS')
+export const GATHER_TO_OTHER_ADDRESS = config.GATHER_TO_OTHER_ADDRESS
+export const GATHER_ADDRESS = config.GATHER_ADDRESS
 
 export const FEE_RECIPIENT = new PublicKey("62qc2CNXwrYqQScmEdiZFFAnJR262PxWEuNQtxfafNgV")
 export const GLOBAL_CONFIG = new PublicKey("ADyA8hdefvWN2dbGGWFotbzWxrAvLW83WG6QCVXvJKqw")
@@ -51,25 +51,25 @@ export const GLOBAL_MINT = new PublicKey("p89evAyzjd9fphjJx7G3RFA48sbZdpGEppRcfR
 
 //  ========= Volume Bot =========
 export const BONDING_CURVE_THRESHOLD_SOL = 30.114164095; // SOL
-export const TOKEN_MINT_PUMPSWAP = retrieveEnvVariable('TOKEN_MINT_PUMPSWAP');
-export const POOL_ID_PUMPSWAP = retrieveEnvVariable('POOL_ID_PUMPSWAP');
+export const TOKEN_MINT_PUMPSWAP = config.TOKEN_MINT_PUMPSWAP;
+export const POOL_ID_PUMPSWAP = config.POOL_ID_PUMPSWAP;
 
-//  == Initialization
-// Buy
-export const TOTAL_PERIOD_MIN = 5;  // min
-export const BUY_INTERVAL_PERIOD_UNIT_SEC = 30;  // sec
-export const SOL_AMOUNT_TO_MARKET_MAKER_SOL = BONDING_CURVE_THRESHOLD_SOL - 30; // SOL
-export const DISTRIBUTE_WALLET_NUM_MARKETMAKER = 2; // num
-export const DISTRIBUTE_DELTA_PERFECTAGE = 5; // %
-export const BUY_SELL_MOVE_TIME_MIN = 2; // min
+//  == Market Maker Configuration (from CLI)
+// Buy Configuration
+export const TOTAL_PERIOD_MIN = config.TOTAL_PERIOD_MIN;
+export const BUY_INTERVAL_PERIOD_UNIT_SEC = config.BUY_INTERVAL_PERIOD_UNIT_SEC;
+export const SOL_AMOUNT_TO_MARKET_MAKER_SOL = config.SOL_AMOUNT_TO_MARKET_MAKER_SOL;
+export const DISTRIBUTE_WALLET_NUM_MARKETMAKER = config.DISTRIBUTE_WALLET_NUM_MARKETMAKER;
+export const DISTRIBUTE_DELTA_PERFECTAGE = config.DISTRIBUTE_DELTA_PERFECTAGE;
+export const BUY_SELL_MOVE_TIME_MIN = config.BUY_SELL_MOVE_TIME_MIN;
 
-// Sell
-export const SELL_INTERVAL_PERIOD_UNIT_SEC = 30;  // sec
-export const SELL_TOKEN_PERCENT = 10 // %
-export const SELL_TOKEN_DELTA_PERFECTAGE = 5; // %
-export const SELL_CONCURRENCY_PERCENT = 25; // %
-export const SELL_CONCURRENCY_DELTA_PERFECTAGE = 10; // %
-export const SELL_ITERATION_SLEEP_TIME_MIN = 1; // min
-export const SELL_ITERATION_SLEEP_TIME_DELTA_PERFECTAGE = 5; // %
+// Sell Configuration
+export const SELL_INTERVAL_PERIOD_UNIT_SEC = config.SELL_INTERVAL_PERIOD_UNIT_SEC;
+export const SELL_TOKEN_PERCENT = config.SELL_TOKEN_PERCENT;
+export const SELL_TOKEN_DELTA_PERFECTAGE = config.SELL_TOKEN_DELTA_PERFECTAGE;
+export const SELL_CONCURRENCY_PERCENT = config.SELL_CONCURRENCY_PERCENT;
+export const SELL_CONCURRENCY_DELTA_PERFECTAGE = config.SELL_CONCURRENCY_DELTA_PERFECTAGE;
+export const SELL_ITERATION_SLEEP_TIME_MIN = config.SELL_ITERATION_SLEEP_TIME_MIN;
+export const SELL_ITERATION_SLEEP_TIME_DELTA_PERFECTAGE = config.SELL_ITERATION_SLEEP_TIME_DELTA_PERFECTAGE;
 
 
