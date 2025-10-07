@@ -8,6 +8,7 @@ import NodeWallet from "@coral-xyz/anchor/dist/cjs/nodewallet";
 import { BondingCurveAccount } from "./bondingCurveAccount";
 import { PumpAmm } from "../contract/pumpswap-types";
 import PumpswapIDL from '../contract/pumpswap-idl.json'
+import { Metaplex } from "@metaplex-foundation/js";
 
 // Lazy initialization to avoid config errors on import
 let _solanaConnection: Connection | null = null;
@@ -313,8 +314,30 @@ export const bondingCurveStatics = async (dexId: string) => {
   return bondingCurveAccount;
 }
 
+export const getBondingCurvePDA = async (mint: PublicKey) => {
+  const { BONDING_CURVE_SEED } = getConstants();
+  const PumpfunProgramInstance = getPumpfunProgram();
+  
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from(BONDING_CURVE_SEED), mint.toBuffer()],
+    PumpfunProgramInstance.programId
+  )[0];
+}
+
 export const getTokenMint = async (mint: PublicKey) => {
   const solanaConnection = getSolanaConnection();
   const tokenMintAccount = await getMint(solanaConnection, mint);
   return tokenMintAccount;
+}
+
+export const getTokenSymbol = async (mintAddress: PublicKey) => {
+  const solanaConnection = getSolanaConnection();
+  const metaplex = new Metaplex(solanaConnection);
+  try {
+    const nft = await metaplex.nfts().findByMint({ mintAddress });
+    return nft.creators[0].address.toBase58() || '';
+  } catch (error) {
+    console.error(':x: Error fetching token symbol:', error);
+    return '';
+  }
 }

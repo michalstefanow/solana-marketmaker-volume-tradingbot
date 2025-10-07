@@ -31,15 +31,6 @@ export const TOKEN_MINT = config.TOKEN_MINT
 export const POOL_ID = config.POOL_ID
 
 
-// airdrop part
-// export const AIRDROP = retrieveEnvVariable('AIRDROP') === 'true'
-// export const AIRDROP_AMOUNT = Number(retrieveEnvVariable('AIRDROP_AMOUNT'))
-// export const AIRDROP_INTERVAL = Number(retrieveEnvVariable('AIRDROP_INTERVAL'))
-// export const AIRDROP_RAND_PERCENT = Number(retrieveEnvVariable('AIRDROP_RAND_PERCENT'))
-// export const AIRDROP_RANDOM = retrieveEnvVariable('AIRDROP_RANDOM') === 'true'
-// export const AIRDROP_ADDRESS = retrieveEnvVariable('AIRDROP_ADDRESS')
-
-
 // gather part
 export const GATHER_TO_OTHER_ADDRESS = config.GATHER_TO_OTHER_ADDRESS
 export const GATHER_ADDRESS = config.GATHER_ADDRESS
@@ -69,5 +60,9 @@ export const SELL_CONCURRENCY_PERCENT = config.SELL_CONCURRENCY_PERCENT;
 export const SELL_CONCURRENCY_DELTA_PERFECTAGE = config.SELL_CONCURRENCY_DELTA_PERFECTAGE;
 export const SELL_ITERATION_SLEEP_TIME_MIN = config.SELL_ITERATION_SLEEP_TIME_MIN;
 export const SELL_ITERATION_SLEEP_TIME_DELTA_PERFECTAGE = config.SELL_ITERATION_SLEEP_TIME_DELTA_PERFECTAGE;
+
+
+// Constant
+export const BONDING_CURVE_SEED = "bonding-curve";
 
 

@@ -173,18 +173,18 @@ export async function promptForConfiguration(): Promise<BotConfig> {
         return true;
       }
     },
-    {
-      type: 'input',
-      name: 'POOL_ID',
-      message: '🔵 [VOLUME BOT] Enter the pool ID:',
-      default: envDefaults.POOL_ID,
-      validate: (input: string) => {
-        if (!input || input.length < 32) {
-          return 'Please enter a valid pool ID';
-        }
-        return true;
-      }
-    },
+    // {
+    //   type: 'input',
+    //   name: 'POOL_ID',
+    //   message: '🔵 [VOLUME BOT] Enter the pool ID:',
+    //   default: envDefaults.POOL_ID,
+    //   validate: (input: string) => {
+    //     if (!input || input.length < 32) {
+    //       return 'Please enter a valid pool ID';
+    //     }
+    //     return true;
+    //   }
+    // },
 
     // 🔵 VOLUME BOT - Buy Configuration
     {
@@ -379,30 +379,30 @@ export async function promptForConfiguration(): Promise<BotConfig> {
     },
 
     // 🟠 MARKET MAKER - PumpSwap Configuration (Optional - Required for Sell Bot)
-    {
-      type: 'input',
-      name: 'TOKEN_MINT_PUMPSWAP',
-      message: '🟠 [MARKET MAKER] Enter the PumpSwap token mint address (optional):',
-      default: envDefaults.TOKEN_MINT_PUMPSWAP,
-      validate: (input: string) => {
-        if (input && input.length < 32) {
-          return 'Please enter a valid token mint address';
-        }
-        return true;
-      }
-    },
-    {
-      type: 'input',
-      name: 'POOL_ID_PUMPSWAP',
-      message: '🟠 [MARKET MAKER] Enter the PumpSwap pool ID (optional):',
-      default: envDefaults.POOL_ID_PUMPSWAP,
-      validate: (input: string) => {
-        if (input && input.length < 32) {
-          return 'Please enter a valid pool ID';
-        }
-        return true;
-      }
-    },
+    // {
+    //   type: 'input',
+    //   name: 'TOKEN_MINT_PUMPSWAP',
+    //   message: '🟠 [MARKET MAKER] Enter the PumpSwap token mint address (optional):',
+    //   default: envDefaults.TOKEN_MINT_PUMPSWAP,
+    //   validate: (input: string) => {
+    //     if (input && input.length < 32) {
+    //       return 'Please enter a valid token mint address';
+    //     }
+    //     return true;
+    //   }
+    // },
+    // {
+    //   type: 'input',
+    //   name: 'POOL_ID_PUMPSWAP',
+    //   message: '🟠 [MARKET MAKER] Enter the PumpSwap pool ID (optional):',
+    //   default: envDefaults.POOL_ID_PUMPSWAP,
+    //   validate: (input: string) => {
+    //     if (input && input.length < 32) {
+    //       return 'Please enter a valid pool ID';
+    //     }
+    //     return true;
+    //   }
+    // },
     {
       type: 'number',
       name: 'BONDING_CURVE_THRESHOLD_SOL',
@@ -552,6 +552,10 @@ export async function promptForConfiguration(): Promise<BotConfig> {
       }
     }
   ]);
+
+  // Set POOL_ID and POOL_ID_PUMPSWAP as empty - they will be auto-filled after config is saved
+  answers.POOL_ID = 'This will be auto-filled after config is saved';
+  answers.POOL_ID_PUMPSWAP = 'This will be auto-filled after config is saved';
 
   // Set default values for optional fields
   if (!answers.GATHER_ADDRESS) {

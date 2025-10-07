@@ -4,7 +4,8 @@ import { displaySavedConfigInfo } from './utils/config-persistence';
 import inquirer from 'inquirer';
 import { Connection, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import base58 from 'bs58';
-import { bondingCurveStatics, getTokenMint } from './utils/pumpfun';
+import { bondingCurveStatics, getBondingCurvePDA, getTokenMint } from './utils/pumpfun';
+import { getPumpswapPoolId } from './utils/pumpswap';
 
 // Global state
 let isBotRunning = false;
@@ -28,10 +29,10 @@ async function main() {
 async function ensureConfigurationLoaded(): Promise<any> {
   // Check for existing configuration
   const savedConfig = loadConfigFromFile();
-  
+
   if (savedConfig) {
     displaySavedConfigInfo(savedConfig);
-    
+
     const { useExisting } = await inquirer.prompt([
       {
         type: 'confirm',
@@ -58,9 +59,9 @@ async function ensureConfigurationLoaded(): Promise<any> {
 async function showMainMenu(config: any) {
   // Always validate configuration before showing menu
   const currentConfig = await validateConfiguration(config);
-  
+
   const configStatus = currentConfig ? '✅ Configured' : '❌ Not Configured';
-  
+
   const { action } = await inquirer.prompt([
     {
       type: 'list',
@@ -92,20 +93,20 @@ async function showMainMenu(config: any) {
       await handleExit();
       break;
   }
-  
+
   return currentConfig;
 }
 
 async function validateConfiguration(config: any): Promise<any> {
   // Check if configuration file still exists
   const savedConfig = loadConfigFromFile();
-  
+
   if (!savedConfig) {
     console.log('\n⚠️  Configuration file not found or corrupted.');
     console.log('Please initialize configuration first.\n');
     return null;
   }
-  
+
   // Check if global config is loaded
   try {
     getGlobalConfig();
@@ -121,13 +122,13 @@ async function validateConfiguration(config: any): Promise<any> {
 async function validateAndRunBotOperation(operation: () => Promise<void>): Promise<void> {
   // Always validate configuration before running any bot operation
   const savedConfig = loadConfigFromFile();
-  
+
   if (!savedConfig) {
     console.log('\n❌ Configuration file not found!');
     console.log('Please initialize configuration first.\n');
     return;
   }
-  
+
   // Ensure global config is loaded
   try {
     getGlobalConfig();
@@ -135,7 +136,7 @@ async function validateAndRunBotOperation(operation: () => Promise<void>): Promi
     console.log('\n🔄 Loading configuration...');
     setGlobalConfig(savedConfig.config, false);
   }
-  
+
   // Run the operation
   await operation();
 }
@@ -147,7 +148,7 @@ async function initializeConfiguration() {
   try {
     const config = await promptForConfiguration();
     displayConfiguration(config);
-    
+
     const { confirmed } = await inquirer.prompt([
       {
         type: 'confirm',
@@ -158,8 +159,27 @@ async function initializeConfiguration() {
     ]);
 
     if (confirmed) {
+      // First save the config so it's available for lazy loading
       setGlobalConfig(config);
-      console.log('✅ Configuration saved successfully!');
+
+      try {
+        // Now fetch the pool IDs (requires config to be initialized first)
+        const bondingCurvePDA = await getBondingCurvePDA(new PublicKey(config.TOKEN_MINT));
+        config.POOL_ID = bondingCurvePDA.toBase58();
+
+        config.TOKEN_MINT_PUMPSWAP = config.TOKEN_MINT;
+        config.POOL_ID_PUMPSWAP = await getPumpswapPoolId(new PublicKey(config.TOKEN_MINT));
+
+        // Update config with the fetched pool IDs
+        setGlobalConfig(config, true);
+        console.log('\n✅ Configuration saved successfully!');
+        console.log(`📍 Pool ID (Bonding Curve): ${config.POOL_ID}`);
+        console.log(`📍 Pool ID (PumpSwap): ${config.POOL_ID_PUMPSWAP}`);
+      } catch (error) {
+        console.error('⚠️  Warning: Could not fetch pool IDs:', error);
+        console.log('✅ Configuration saved with provided pool IDs');
+      }
+
       return config;
     } else {
       console.log('❌ Configuration cancelled');
@@ -259,15 +279,15 @@ async function manageBot() {
       type: 'list',
       name: 'action',
       message: 'What would you like to do?',
-        choices: [
-          { name: '🚀 Launch Bot (Start buying and selling)', value: 'launch' },
-          { name: '💰 Launch Sell Bot (Start selling only)', value: 'sell' },
-          { name: '⏹️  Stop Bot', value: 'stop', disabled: !isBotRunning ? 'No bot running' : false },
-          { name: '⏰ Extend Bot Runtime', value: 'extend', disabled: !isBotRunning ? 'No bot running' : false },
-          { name: '📊 Bot Status', value: 'status' },
-          { name: '💸 Collect All SOL', value: 'collect' },
-          { name: '🔙 Back to Main Menu', value: 'back' }
-        ]
+      choices: [
+        { name: '🚀 Launch Bot (Start buying and selling)', value: 'launch' },
+        { name: '💰 Launch Sell Bot (Start selling only)', value: 'sell' },
+        { name: '⏹️  Stop Bot', value: 'stop', disabled: !isBotRunning ? 'No bot running' : false },
+        { name: '⏰ Extend Bot Runtime', value: 'extend', disabled: !isBotRunning ? 'No bot running' : false },
+        { name: '📊 Bot Status', value: 'status' },
+        { name: '💸 Collect All SOL', value: 'collect' },
+        { name: '🔙 Back to Main Menu', value: 'back' }
+      ]
     }
   ]);
 
@@ -304,7 +324,7 @@ async function launchVolumeBot() {
       console.log('Please initialize configuration first.\n');
       return;
     }
-    
+
     // Ensure global config is loaded
     try {
       getGlobalConfig();
@@ -312,7 +332,7 @@ async function launchVolumeBot() {
       console.log('\n🔄 Loading configuration...');
       setGlobalConfig(savedConfig.config, false);
     }
-    
+
     // Ask if user wants to update parameters before launching
     const { updateParams } = await inquirer.prompt([
       {
@@ -327,7 +347,7 @@ async function launchVolumeBot() {
         ]
       }
     ]);
-    
+
     if (updateParams === 'volume') {
       await updateVolumeBotConfiguration();
       return;
@@ -338,27 +358,27 @@ async function launchVolumeBot() {
       await updateVolumeBotConfiguration();
       return;
     }
-    
+
     console.log('\n🚀 Launching Volume Bot...');
     console.log('This will start both VolumeBot and MarketMakerForBuy functions simultaneously.');
     console.log('VolumeBot: Creates volume by buying and selling tokens');
     console.log('MarketMakerForBuy: Market making operations for buying\n');
-    
+
     // Create AbortController for stopping bots
     botAbortController = new AbortController();
-    
+
     const { VolumeBot, MarketMakerForBuy } = await import('./index');
     isBotRunning = true;
     currentBotType = 'Volume Bot + Market Maker';
     botStartTime = new Date();
-    
+
     // Run both functions in parallel with abort signal
     const volumeBotPromise = VolumeBot(botAbortController.signal);
     const marketMakerPromise = MarketMakerForBuy(botAbortController.signal);
-    
+
     // Store both processes
     currentBotProcess = { volumeBot: volumeBotPromise, marketMaker: marketMakerPromise };
-    
+
     console.log('✅ Volume Bot and Market Maker started successfully!');
     console.log('💡 Both functions are running in parallel');
     console.log('💡 Use "Stop Bot" to halt both processes when needed.\n');
@@ -378,7 +398,7 @@ async function launchSellBot() {
       console.log('Please initialize configuration first.\n');
       return;
     }
-    
+
     // Ensure global config is loaded
     try {
       getGlobalConfig();
@@ -386,13 +406,13 @@ async function launchSellBot() {
       console.log('\n🔄 Loading configuration...');
       setGlobalConfig(savedConfig.config, false);
     }
-    
+
     // Check if PumpSwap configuration is available
     const currentConfig = getGlobalConfig();
     if (!currentConfig.TOKEN_MINT_PUMPSWAP || !currentConfig.POOL_ID_PUMPSWAP) {
       console.log('\n⚠️  PumpSwap configuration is required for Sell Bot!');
       console.log('Missing: TOKEN_MINT_PUMPSWAP or POOL_ID_PUMPSWAP');
-      
+
       const { updateConfig } = await inquirer.prompt([
         {
           type: 'confirm',
@@ -401,7 +421,7 @@ async function launchSellBot() {
           default: true
         }
       ]);
-      
+
       if (updateConfig) {
         await updateSellBotConfiguration();
         return; // Restart the function after updating config
@@ -410,7 +430,7 @@ async function launchSellBot() {
         return;
       }
     }
-    
+
     // Ask if user wants to update sell parameters
     const { updateParams } = await inquirer.prompt([
       {
@@ -420,24 +440,24 @@ async function launchSellBot() {
         default: false
       }
     ]);
-    
+
     if (updateParams) {
       await updateSellBotConfiguration();
       return; // Restart the function after updating config
     }
-    
+
     console.log('\n💰 Launching Sell Bot...');
     console.log('This will start selling tokens from distributed wallets.\n');
-    
+
     // Create AbortController for stopping bot
     botAbortController = new AbortController();
-    
+
     const { MarketMakerForSell } = await import('./index');
     isBotRunning = true;
     currentBotType = 'Sell Bot';
     botStartTime = new Date();
     currentBotProcess = MarketMakerForSell(botAbortController.signal);
-    
+
     console.log('✅ Sell Bot started successfully!');
     console.log('💡 Use "Stop Bot" to halt the bot when needed.\n');
   } catch (error) {
@@ -450,21 +470,21 @@ async function stopBot() {
   if (isBotRunning && botAbortController) {
     console.log('\n⏹️  Stopping bot...');
     console.log(`Stopping: ${currentBotType}`);
-    
+
     try {
       // Abort the bot processes
       botAbortController.abort();
-      
+
       // Wait a moment for graceful shutdown
       await new Promise(resolve => setTimeout(resolve, 10000));
-      
+
       // Reset state
       isBotRunning = false;
       currentBotProcess = null;
       currentBotType = '';
       botAbortController = null;
       botStartTime = null;
-      
+
       console.log('✅ Bot will be stopped on next iteration...');
     } catch (error) {
       console.error('❌ Error stopping bot:', error);
@@ -486,7 +506,7 @@ async function showBotStatus() {
   console.log(`Status: ${isBotRunning ? '🟢 Running' : '🔴 Stopped'}`);
   if (isBotRunning) {
     console.log(`Type: ${currentBotType}`);
-    
+
     if (botStartTime) {
       const now = new Date();
       const diffMs = now.getTime() - botStartTime.getTime();
@@ -494,7 +514,7 @@ async function showBotStatus() {
       const diffSeconds = Math.floor((diffMs % 60000) / 1000);
       const diffHours = Math.floor(diffMinutes / 60);
       const remainingMinutes = diffMinutes % 60;
-      
+
       if (diffHours > 0) {
         console.log(`Running Time: ${diffHours}h ${remainingMinutes}m ${diffSeconds}s`);
       } else if (diffMinutes > 0) {
@@ -503,7 +523,7 @@ async function showBotStatus() {
         console.log(`Running Time: ${diffSeconds}s`);
       }
     }
-    
+
     console.log('💡 Use "Stop Bot" to halt the bot');
   }
   console.log('');
@@ -550,7 +570,7 @@ async function collectWithSell() {
       console.log('Please initialize configuration first.\n');
       return;
     }
-    
+
     // Ensure global config is loaded
     try {
       getGlobalConfig();
@@ -558,10 +578,10 @@ async function collectWithSell() {
       console.log('\n🔄 Loading configuration...');
       setGlobalConfig(savedConfig.config, false);
     }
-    
+
     console.log('\n🔄 Starting collection with sell...');
     console.log('This will sell all tokens first, then collect the SOL.\n');
-    
+
     const { main: gatherMain } = await import('./gather');
     await gatherMain("market_maker_data.json");
     await gatherMain("data.json");
@@ -569,7 +589,7 @@ async function collectWithSell() {
     console.log("Collect with Sell is completed..");
     console.log("============================================================================ \n")
     console.log("============================================================================ \n")
-    
+
     console.log('✅ Collection completed!');
   } catch (error) {
     console.error('❌ Error during collection:', error);
@@ -582,7 +602,7 @@ async function manageTiming() {
 
   try {
     const config = getGlobalConfig();
-    
+
     const { action } = await inquirer.prompt([
       {
         type: 'list',
@@ -795,12 +815,12 @@ async function viewMarketInfo() {
     const config = getGlobalConfig();
     console.log('\n💰 Market Information');
     console.log('=====================');
-    
+
     console.log(`Token Mint: ${config.TOKEN_MINT}`);
     console.log(`Pool ID: ${config.POOL_ID}`);
 
     const tokenMint = await getTokenMint(new PublicKey(config.TOKEN_MINT));
-    
+
     // Note: In a real implementation, you would fetch actual market data
     const bondingCurveAccount = await bondingCurveStatics("pumpfun");
     if (!bondingCurveAccount) {
@@ -815,43 +835,17 @@ async function viewMarketInfo() {
   }
 }
 
-async function viewSOLSpent() {
-  try {
-    const config = getGlobalConfig();
-    console.log('\n💸 SOL Spending Information');
-    console.log('============================');
-    
-    const connection = new Connection(config.RPC_ENDPOINT, 'confirmed');
-    const mainWallet = new PublicKey(base58.decode(config.PRIVATE_KEY).slice(32));
-    const balance = await connection.getBalance(mainWallet);
-    
-    console.log(`Main Wallet: ${mainWallet.toBase58()}`);
-    console.log(`Current Balance: ${(balance / LAMPORTS_PER_SOL).toFixed(4)} SOL`);
-    console.log(`SOL to Distribute: ${config.SOL_AMOUNT_TO_DISTRIBUTE} SOL`);
-    console.log(`Number of Wallets: ${config.DISTRIBUTE_WALLET_NUM}`);
-    console.log(`Estimated Total Needed: ${(config.SOL_AMOUNT_TO_DISTRIBUTE + 0.01).toFixed(4)} SOL`);
-    
-    if (balance < config.SOL_AMOUNT_TO_DISTRIBUTE * LAMPORTS_PER_SOL) {
-      console.log('⚠️  Warning: Insufficient SOL balance for distribution');
-    } else {
-      console.log('✅ Sufficient SOL balance for distribution');
-    }
-  } catch (error) {
-    console.error('❌ Error fetching SOL info:', error);
-  }
-}
-
 async function extendBotRuntime() {
   console.log('\n⏰ Extend Bot Runtime');
   console.log('====================\n');
-  
+
   if (!isBotRunning) {
     console.log('❌ No bot is currently running. Please start a bot first.\n');
     return;
   }
-  
+
   const currentConfig = getGlobalConfig();
-  
+
   const { additionalMinutes } = await inquirer.prompt([
     {
       type: 'number',
@@ -869,22 +863,22 @@ async function extendBotRuntime() {
       }
     }
   ]);
-  
+
   if (additionalMinutes <= 0) {
     console.log('❌ No additional time specified. Operation cancelled.\n');
     return;
   }
-  
+
   // Update the configuration with additional time
   const updatedConfig = {
     ...currentConfig,
     ADDITIONAL_TIME_MIN: additionalMinutes
   };
-  
+
   setGlobalConfig(updatedConfig, true);
 
   const currentConfigAfterUpdate = getGlobalConfig();
-  
+
   console.log("\n[MARKET MAKER] currentConfigAfterUpdate ==> ", currentConfigAfterUpdate);
   console.log(`\n✅ Bot runtime extended by ${additionalMinutes} minutes!`);
   console.log(`💡 The additional time will be applied during the next bot iteration check.`);
@@ -894,9 +888,9 @@ async function extendBotRuntime() {
 async function updateVolumeBotConfiguration() {
   console.log('\n🔵 Updating Volume Bot Configuration');
   console.log('====================================\n');
-  
+
   const currentConfig = getGlobalConfig();
-  
+
   const answers = await inquirer.prompt([
     // Volume Bot Configuration
     {
@@ -911,18 +905,18 @@ async function updateVolumeBotConfiguration() {
         return true;
       }
     },
-    {
-      type: 'input',
-      name: 'POOL_ID',
-      message: '🔵 [VOLUME BOT] Enter the pool ID:',
-      default: currentConfig.POOL_ID,
-      validate: (input: string) => {
-        if (!input || input.length < 32) {
-          return 'Please enter a valid pool ID';
-        }
-        return true;
-      }
-    },
+    // {
+    //   type: 'input',
+    //   name: 'POOL_ID',
+    //   message: '🔵 [VOLUME BOT] Enter the pool ID:',
+    //   default: currentConfig.POOL_ID,
+    //   validate: (input: string) => {
+    //     if (!input || input.length < 32) {
+    //       return 'Please enter a valid pool ID';
+    //     }
+    //     return true;
+    //   }
+    // },
     {
       type: 'number',
       name: 'BUY_INTERVAL_MIN',
@@ -1044,16 +1038,16 @@ async function updateVolumeBotConfiguration() {
       }
     }
   ]);
-  
+
   // Update the configuration
   const updatedConfig = {
     ...currentConfig,
     ...answers
   };
-  
+
   setGlobalConfig(updatedConfig, true);
   console.log('\n✅ Volume Bot configuration updated successfully!');
-  
+
   // Restart the volume bot launch process
   await launchVolumeBot();
 }
@@ -1061,9 +1055,9 @@ async function updateVolumeBotConfiguration() {
 async function updateMarketMakerConfiguration() {
   console.log('\n🟠 Updating Market Maker Configuration');
   console.log('======================================\n');
-  
+
   const currentConfig = getGlobalConfig();
-  
+
   const answers = await inquirer.prompt([
     // Market Maker Configuration
     {
@@ -1139,16 +1133,16 @@ async function updateMarketMakerConfiguration() {
       }
     }
   ]);
-  
+
   // Update the configuration
   const updatedConfig = {
     ...currentConfig,
     ...answers
   };
-  
+
   setGlobalConfig(updatedConfig, true);
   console.log('\n✅ Market Maker configuration updated successfully!');
-  
+
   // Restart the volume bot launch process (since it includes both Volume Bot and Market Maker)
   await launchVolumeBot();
 }
@@ -1156,36 +1150,35 @@ async function updateMarketMakerConfiguration() {
 async function updateSellBotConfiguration() {
   console.log('\n🟠 Updating Sell Bot Configuration');
   console.log('==================================\n');
-  
+
   const currentConfig = getGlobalConfig();
-  
+
   const answers = await inquirer.prompt([
     // PumpSwap Configuration (Required for Sell Bot)
-    {
-      type: 'input',
-      name: 'TOKEN_MINT_PUMPSWAP',
-      message: '🟠 [MARKET MAKER] Enter the PumpSwap token mint address:',
-      default: currentConfig.TOKEN_MINT_PUMPSWAP,
-      validate: (input: string) => {
-        if (!input || input.length < 32) {
-          return 'Please enter a valid token mint address';
-        }
-        return true;
-      }
-    },
-    {
-      type: 'input',
-      name: 'POOL_ID_PUMPSWAP',
-      message: '🟠 [MARKET MAKER] Enter the PumpSwap pool ID:',
-      default: currentConfig.POOL_ID_PUMPSWAP,
-      validate: (input: string) => {
-        if (!input || input.length < 32) {
-          return 'Please enter a valid pool ID';
-        }
-        return true;
-      }
-    },
-    
+    // {
+    //   type: 'input',
+    //   name: 'TOKEN_MINT_PUMPSWAP',
+    //   message: '🟠 [MARKET MAKER] Enter the PumpSwap token mint address:',
+    //   default: currentConfig.TOKEN_MINT_PUMPSWAP,
+    //   validate: (input: string) => {
+    //     if (!input || input.length < 32) {
+    //       return 'Please enter a valid token mint address';
+    //     }
+    //     return true;
+    //   }
+    // },
+    // {
+    //   type: 'input',
+    //   name: 'POOL_ID_PUMPSWAP',
+    //   message: '🟠 [MARKET MAKER] Enter the PumpSwap pool ID:',
+    //   default: currentConfig.POOL_ID_PUMPSWAP,
+    //   validate: (input: string) => {
+    //     if (!input || input.length < 32) {
+    //       return 'Please enter a valid pool ID';
+    //     }
+    //     return true;
+    //   }
+    // },
     {
       type: 'number',
       name: 'SELL_TOKEN_PERCENT',
@@ -1259,28 +1252,28 @@ async function updateSellBotConfiguration() {
       }
     }
   ]);
-  
+
   // Update the configuration
   const updatedConfig = {
     ...currentConfig,
     ...answers
   };
-  
+
   setGlobalConfig(updatedConfig, true);
   console.log('\n✅ Sell Bot configuration updated successfully!');
-  
+
   // Restart the sell bot launch process
   await launchSellBot();
 }
 
 async function handleExit() {
   console.log('\n👋 Exiting PumpFun Volume Bot...');
-  
+
   if (isBotRunning) {
     console.log('🛑 Bot is currently running. Stopping bot...');
     await stopBot();
     console.log('✅ Bot stopped successfully.');
-    
+
     // Ask if user wants to collect SOL before exiting
     const { collectSOL } = await inquirer.prompt([
       {
@@ -1290,7 +1283,7 @@ async function handleExit() {
         default: true
       }
     ]);
-    
+
     if (collectSOL) {
       console.log('\n💰 Collecting all SOL before exit...');
       try {
@@ -1302,7 +1295,7 @@ async function handleExit() {
       }
     }
   }
-  
+
   console.log('\n👋 Goodbye!');
   process.exit(0);
 }
