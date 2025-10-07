@@ -93,7 +93,12 @@ export const makeSellPumpfunTokenTx = async (mainKp: Keypair, mint: PublicKey) =
     const buyVTx = new VersionedTransaction(msg)
     buyVTx.sign([mainKp])
 
-    console.log(await solanaConnection.simulateTransaction(buyVTx, { sigVerify: true }))
+    const simulateResult = await solanaConnection.simulateTransaction(buyVTx, { sigVerify: true })
+    if (simulateResult.value.err) {
+      console.log("Simulation failed")
+      console.log("Error : ", simulateResult)
+      return null
+    }
     return buyVTx
   } catch (error) {
     console.log("Error while making buy transaction in pumpfun")

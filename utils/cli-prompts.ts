@@ -9,7 +9,7 @@ export interface BotConfig {
   PRIVATE_KEY: string;
   RPC_ENDPOINT: string;
   RPC_WEBSOCKET_ENDPOINT: string;
-  
+
   // Trading Configuration
   TOKEN_MINT: string;
   POOL_ID: string;
@@ -19,37 +19,36 @@ export interface BotConfig {
   SELL_INTERVAL_MAX: number;
   BUY_UPPER_PERCENT: number;
   BUY_LOWER_PERCENT: number;
-  
+
   // Distribution Configuration
   DISTRIBUTE_WALLET_NUM: number;
   SOL_AMOUNT_TO_DISTRIBUTE: number;
   DISTRIBUTE_INTERVAL_MIN: number;
   DISTRIBUTE_INTERVAL_MAX: number;
-  
+
   // Fee Configuration
   FEE_LEVEL: number;
   JITO_MODE: boolean;
   JITO_FEE: number;
   SLIPPAGE: number;
-  
+
   // Gathering Configuration
   GATHER_TO_OTHER_ADDRESS: boolean;
   GATHER_ADDRESS: string;
-  
+
   // Market Making Configuration
   TOKEN_MINT_PUMPSWAP: string;
   POOL_ID_PUMPSWAP: string;
-  
+  BONDING_CURVE_THRESHOLD_SOL: number;
+
   // Market Maker - Buy Configuration
   TOTAL_PERIOD_MIN: number;
   BUY_INTERVAL_PERIOD_UNIT_SEC: number;
-  SOL_AMOUNT_TO_MARKET_MAKER_SOL: number;
   DISTRIBUTE_WALLET_NUM_MARKETMAKER: number;
   DISTRIBUTE_DELTA_PERFECTAGE: number;
-  BUY_SELL_MOVE_TIME_MIN: number;
-  
+  ADDITIONAL_TIME_MIN: number;
+
   // Market Maker - Sell Configuration
-  SELL_INTERVAL_PERIOD_UNIT_SEC: number;
   SELL_TOKEN_PERCENT: number;
   SELL_TOKEN_DELTA_PERFECTAGE: number;
   SELL_CONCURRENCY_PERCENT: number;
@@ -86,59 +85,58 @@ function loadAllEnvDefaults(): Partial<BotConfig> {
     PRIVATE_KEY: process.env.PRIVATE_KEY || '',
     RPC_ENDPOINT: process.env.RPC_ENDPOINT || 'https://api.mainnet-beta.solana.com',
     RPC_WEBSOCKET_ENDPOINT: process.env.RPC_WEBSOCKET_ENDPOINT || 'wss://api.mainnet-beta.solana.com',
-    
+
     // Trading Configuration
     TOKEN_MINT: process.env.TOKEN_MINT || '',
     POOL_ID: process.env.POOL_ID || '',
-    
+
     // Buy Configuration
     BUY_INTERVAL_MIN: process.env.BUY_INTERVAL_MIN ? Number(process.env.BUY_INTERVAL_MIN) : 5,
     BUY_INTERVAL_MAX: process.env.BUY_INTERVAL_MAX ? Number(process.env.BUY_INTERVAL_MAX) : 15,
     BUY_LOWER_PERCENT: process.env.BUY_LOWER_PERCENT ? Number(process.env.BUY_LOWER_PERCENT) : 10,
     BUY_UPPER_PERCENT: process.env.BUY_UPPER_PERCENT ? Number(process.env.BUY_UPPER_PERCENT) : 30,
-    
+
     // Sell Configuration
     SELL_INTERVAL_MIN: process.env.SELL_INTERVAL_MIN ? Number(process.env.SELL_INTERVAL_MIN) : 10,
     SELL_INTERVAL_MAX: process.env.SELL_INTERVAL_MAX ? Number(process.env.SELL_INTERVAL_MAX) : 30,
-    
+
     // Distribution Configuration
-    DISTRIBUTE_WALLET_NUM: process.env.DISTRIBUTE_WALLET_NUM ? Number(process.env.DISTRIBUTE_WALLET_NUM) : 5,
+    DISTRIBUTE_WALLET_NUM: process.env.DISTRIBUTE_WALLET_NUM ? Number(process.env.DISTRIBUTE_WALLET_NUM) : 1,
     SOL_AMOUNT_TO_DISTRIBUTE: process.env.SOL_AMOUNT_TO_DISTRIBUTE ? Number(process.env.SOL_AMOUNT_TO_DISTRIBUTE) : 0.1,
     DISTRIBUTE_INTERVAL_MIN: process.env.DISTRIBUTE_INTERVAL_MIN ? Number(process.env.DISTRIBUTE_INTERVAL_MIN) : 30,
     DISTRIBUTE_INTERVAL_MAX: process.env.DISTRIBUTE_INTERVAL_MAX ? Number(process.env.DISTRIBUTE_INTERVAL_MAX) : 60,
-    
+
     // Fee Configuration
     FEE_LEVEL: process.env.FEE_LEVEL ? Number(process.env.FEE_LEVEL) : 1,
     JITO_MODE: process.env.JITO_MODE === 'true',
     JITO_FEE: process.env.JITO_FEE ? Number(process.env.JITO_FEE) : 1000000,
     SLIPPAGE: process.env.SLIPPAGE ? Number(process.env.SLIPPAGE) : 5,
-    
+
     // Gathering Configuration
     GATHER_TO_OTHER_ADDRESS: process.env.GATHER_TO_OTHER_ADDRESS === 'true',
     GATHER_ADDRESS: process.env.GATHER_ADDRESS || '',
-    
-      // Market Making Configuration
-      TOKEN_MINT_PUMPSWAP: process.env.TOKEN_MINT_PUMPSWAP || '',
-      POOL_ID_PUMPSWAP: process.env.POOL_ID_PUMPSWAP || '',
-      
-      // Market Maker - Buy Configuration
-      TOTAL_PERIOD_MIN: process.env.TOTAL_PERIOD_MIN ? Number(process.env.TOTAL_PERIOD_MIN) : 5,
-      BUY_INTERVAL_PERIOD_UNIT_SEC: process.env.BUY_INTERVAL_PERIOD_UNIT_SEC ? Number(process.env.BUY_INTERVAL_PERIOD_UNIT_SEC) : 30,
-      SOL_AMOUNT_TO_MARKET_MAKER_SOL: process.env.SOL_AMOUNT_TO_MARKET_MAKER_SOL ? Number(process.env.SOL_AMOUNT_TO_MARKET_MAKER_SOL) : 0.114164095,
-      DISTRIBUTE_WALLET_NUM_MARKETMAKER: process.env.DISTRIBUTE_WALLET_NUM_MARKETMAKER ? Number(process.env.DISTRIBUTE_WALLET_NUM_MARKETMAKER) : 2,
-      DISTRIBUTE_DELTA_PERFECTAGE: process.env.DISTRIBUTE_DELTA_PERFECTAGE ? Number(process.env.DISTRIBUTE_DELTA_PERFECTAGE) : 5,
-      BUY_SELL_MOVE_TIME_MIN: process.env.BUY_SELL_MOVE_TIME_MIN ? Number(process.env.BUY_SELL_MOVE_TIME_MIN) : 2,
-      
-      // Market Maker - Sell Configuration
-      SELL_INTERVAL_PERIOD_UNIT_SEC: process.env.SELL_INTERVAL_PERIOD_UNIT_SEC ? Number(process.env.SELL_INTERVAL_PERIOD_UNIT_SEC) : 30,
-      SELL_TOKEN_PERCENT: process.env.SELL_TOKEN_PERCENT ? Number(process.env.SELL_TOKEN_PERCENT) : 10,
-      SELL_TOKEN_DELTA_PERFECTAGE: process.env.SELL_TOKEN_DELTA_PERFECTAGE ? Number(process.env.SELL_TOKEN_DELTA_PERFECTAGE) : 5,
-      SELL_CONCURRENCY_PERCENT: process.env.SELL_CONCURRENCY_PERCENT ? Number(process.env.SELL_CONCURRENCY_PERCENT) : 25,
-      SELL_CONCURRENCY_DELTA_PERFECTAGE: process.env.SELL_CONCURRENCY_DELTA_PERFECTAGE ? Number(process.env.SELL_CONCURRENCY_DELTA_PERFECTAGE) : 10,
-      SELL_ITERATION_SLEEP_TIME_MIN: process.env.SELL_ITERATION_SLEEP_TIME_MIN ? Number(process.env.SELL_ITERATION_SLEEP_TIME_MIN) : 1,
-      SELL_ITERATION_SLEEP_TIME_DELTA_PERFECTAGE: process.env.SELL_ITERATION_SLEEP_TIME_DELTA_PERFECTAGE ? Number(process.env.SELL_ITERATION_SLEEP_TIME_DELTA_PERFECTAGE) : 5
-    };
-  }
+
+    // Market Making Configuration
+    TOKEN_MINT_PUMPSWAP: process.env.TOKEN_MINT_PUMPSWAP || '',
+    POOL_ID_PUMPSWAP: process.env.POOL_ID_PUMPSWAP || '',
+    BONDING_CURVE_THRESHOLD_SOL: process.env.BONDING_CURVE_THRESHOLD_SOL ? Number(process.env.BONDING_CURVE_THRESHOLD_SOL) : 30.164164095,
+
+    // Market Maker - Buy Configuration
+    TOTAL_PERIOD_MIN: process.env.TOTAL_PERIOD_MIN ? Number(process.env.TOTAL_PERIOD_MIN) : 1,
+    BUY_INTERVAL_PERIOD_UNIT_SEC: process.env.BUY_INTERVAL_PERIOD_UNIT_SEC ? Number(process.env.BUY_INTERVAL_PERIOD_UNIT_SEC) : 30,
+    DISTRIBUTE_WALLET_NUM_MARKETMAKER: process.env.DISTRIBUTE_WALLET_NUM_MARKETMAKER ? Number(process.env.DISTRIBUTE_WALLET_NUM_MARKETMAKER) : 2,
+    DISTRIBUTE_DELTA_PERFECTAGE: process.env.DISTRIBUTE_DELTA_PERFECTAGE ? Number(process.env.DISTRIBUTE_DELTA_PERFECTAGE) : 5,
+    ADDITIONAL_TIME_MIN: process.env.ADDITIONAL_TIME_MIN ? Number(process.env.ADDITIONAL_TIME_MIN) : 0,
+
+    // Market Maker - Sell Configuration
+    SELL_TOKEN_PERCENT: process.env.SELL_TOKEN_PERCENT ? Number(process.env.SELL_TOKEN_PERCENT) : 10,
+    SELL_TOKEN_DELTA_PERFECTAGE: process.env.SELL_TOKEN_DELTA_PERFECTAGE ? Number(process.env.SELL_TOKEN_DELTA_PERFECTAGE) : 5,
+    SELL_CONCURRENCY_PERCENT: process.env.SELL_CONCURRENCY_PERCENT ? Number(process.env.SELL_CONCURRENCY_PERCENT) : 25,
+    SELL_CONCURRENCY_DELTA_PERFECTAGE: process.env.SELL_CONCURRENCY_DELTA_PERFECTAGE ? Number(process.env.SELL_CONCURRENCY_DELTA_PERFECTAGE) : 10,
+    SELL_ITERATION_SLEEP_TIME_MIN: process.env.SELL_ITERATION_SLEEP_TIME_MIN ? Number(process.env.SELL_ITERATION_SLEEP_TIME_MIN) : 1,
+    SELL_ITERATION_SLEEP_TIME_DELTA_PERFECTAGE: process.env.SELL_ITERATION_SLEEP_TIME_DELTA_PERFECTAGE ? Number(process.env.SELL_ITERATION_SLEEP_TIME_DELTA_PERFECTAGE) : 5
+  };
+}
 
 export async function promptForConfiguration(): Promise<BotConfig> {
   console.log('🚀 Welcome to PumpFun Volume Bot Configuration!');
@@ -146,7 +144,7 @@ export async function promptForConfiguration(): Promise<BotConfig> {
 
   // Load all environment defaults
   const envDefaults = loadAllEnvDefaults();
-  
+
   console.log('📋 Environment variables loaded as defaults:');
   console.log(`   Private Key: ${envDefaults.PRIVATE_KEY?.substring(0, 8)}...`);
   console.log(`   RPC Endpoint: ${envDefaults.RPC_ENDPOINT}`);
@@ -161,12 +159,12 @@ export async function promptForConfiguration(): Promise<BotConfig> {
   const answers = await inquirer.prompt([
     // Core Configuration (loaded from env)
     // PRIVATE_KEY, RPC_ENDPOINT, RPC_WEBSOCKET_ENDPOINT are loaded from env
-    
-    // Trading Configuration
+
+    // ========== VOLUME BOT CONFIGURATION ==========
     {
       type: 'input',
       name: 'TOKEN_MINT',
-      message: 'Enter the token mint address to trade:',
+      message: '🔵 [VOLUME BOT] Enter the token mint address to trade:',
       default: envDefaults.TOKEN_MINT,
       validate: (input: string) => {
         if (!input || input.length < 32) {
@@ -178,7 +176,7 @@ export async function promptForConfiguration(): Promise<BotConfig> {
     {
       type: 'input',
       name: 'POOL_ID',
-      message: 'Enter the pool ID:',
+      message: '🔵 [VOLUME BOT] Enter the pool ID:',
       default: envDefaults.POOL_ID,
       validate: (input: string) => {
         if (!input || input.length < 32) {
@@ -187,12 +185,12 @@ export async function promptForConfiguration(): Promise<BotConfig> {
         return true;
       }
     },
-    
-    // Buy Configuration
+
+    // 🔵 VOLUME BOT - Buy Configuration
     {
       type: 'number',
       name: 'BUY_INTERVAL_MIN',
-      message: 'Minimum buy interval (seconds):',
+      message: '🔵 [VOLUME BOT] Minimum buy interval (seconds):',
       default: envDefaults.BUY_INTERVAL_MIN,
       validate: (input: number) => {
         if (input < 1) {
@@ -204,7 +202,7 @@ export async function promptForConfiguration(): Promise<BotConfig> {
     {
       type: 'number',
       name: 'BUY_INTERVAL_MAX',
-      message: 'Maximum buy interval (seconds):',
+      message: '🔵 [VOLUME BOT] Maximum buy interval (seconds):',
       default: envDefaults.BUY_INTERVAL_MAX,
       validate: (input: number) => {
         if (input < 1) {
@@ -216,7 +214,7 @@ export async function promptForConfiguration(): Promise<BotConfig> {
     {
       type: 'number',
       name: 'BUY_LOWER_PERCENT',
-      message: 'Buy lower percentage (0-100):',
+      message: '🔵 [VOLUME BOT] Buy lower percentage (0-100):',
       default: envDefaults.BUY_LOWER_PERCENT,
       validate: (input: number) => {
         if (input < 0 || input > 100) {
@@ -228,7 +226,7 @@ export async function promptForConfiguration(): Promise<BotConfig> {
     {
       type: 'number',
       name: 'BUY_UPPER_PERCENT',
-      message: 'Buy upper percentage (0-100):',
+      message: '🔵 [VOLUME BOT] Buy upper percentage (0-100):',
       default: envDefaults.BUY_UPPER_PERCENT,
       validate: (input: number) => {
         if (input < 0 || input > 100) {
@@ -237,12 +235,12 @@ export async function promptForConfiguration(): Promise<BotConfig> {
         return true;
       }
     },
-    
-    // Sell Configuration
+
+    // 🔵 VOLUME BOT - Sell Configuration
     {
       type: 'number',
       name: 'SELL_INTERVAL_MIN',
-      message: 'Minimum sell interval (seconds):',
+      message: '🔵 [VOLUME BOT] Minimum sell interval (seconds):',
       default: envDefaults.SELL_INTERVAL_MIN,
       validate: (input: number) => {
         if (input < 1) {
@@ -254,7 +252,7 @@ export async function promptForConfiguration(): Promise<BotConfig> {
     {
       type: 'number',
       name: 'SELL_INTERVAL_MAX',
-      message: 'Maximum sell interval (seconds):',
+      message: '🔵 [VOLUME BOT] Maximum sell interval (seconds):',
       default: envDefaults.SELL_INTERVAL_MAX,
       validate: (input: number) => {
         if (input < 1) {
@@ -263,12 +261,12 @@ export async function promptForConfiguration(): Promise<BotConfig> {
         return true;
       }
     },
-    
-    // Distribution Configuration
+
+    // 🔵 VOLUME BOT - Distribution Configuration
     {
       type: 'number',
       name: 'DISTRIBUTE_WALLET_NUM',
-      message: 'Number of wallets to distribute to:',
+      message: '🔵 [VOLUME BOT] Number of wallets to distribute to:',
       default: envDefaults.DISTRIBUTE_WALLET_NUM,
       validate: (input: number) => {
         if (input < 1 || input > 20) {
@@ -280,7 +278,7 @@ export async function promptForConfiguration(): Promise<BotConfig> {
     {
       type: 'number',
       name: 'SOL_AMOUNT_TO_DISTRIBUTE',
-      message: 'SOL amount to distribute (total):',
+      message: '🔵 [VOLUME BOT] SOL amount to distribute (total):',
       default: envDefaults.SOL_AMOUNT_TO_DISTRIBUTE,
       validate: (input: number) => {
         if (input <= 0) {
@@ -292,7 +290,7 @@ export async function promptForConfiguration(): Promise<BotConfig> {
     {
       type: 'number',
       name: 'DISTRIBUTE_INTERVAL_MIN',
-      message: 'Minimum distribution interval (seconds):',
+      message: '🔵 [VOLUME BOT] Minimum distribution interval (seconds):',
       default: envDefaults.DISTRIBUTE_INTERVAL_MIN,
       validate: (input: number) => {
         if (input < 1) {
@@ -304,7 +302,7 @@ export async function promptForConfiguration(): Promise<BotConfig> {
     {
       type: 'number',
       name: 'DISTRIBUTE_INTERVAL_MAX',
-      message: 'Maximum distribution interval (seconds):',
+      message: '🔵 [VOLUME BOT] Maximum distribution interval (seconds):',
       default: envDefaults.DISTRIBUTE_INTERVAL_MAX,
       validate: (input: number) => {
         if (input < 1) {
@@ -313,12 +311,12 @@ export async function promptForConfiguration(): Promise<BotConfig> {
         return true;
       }
     },
-    
-    // Fee Configuration
+
+    // ⚙️ GENERAL - Fee Configuration
     {
       type: 'number',
       name: 'FEE_LEVEL',
-      message: 'Fee level (1-10):',
+      message: '⚙️ [GENERAL] Fee level (1-10):',
       default: envDefaults.FEE_LEVEL,
       validate: (input: number) => {
         if (input < 1 || input > 10) {
@@ -330,13 +328,13 @@ export async function promptForConfiguration(): Promise<BotConfig> {
     {
       type: 'confirm',
       name: 'JITO_MODE',
-      message: 'Enable JITO mode for faster transactions?',
+      message: '⚙️ [GENERAL] Enable JITO mode for faster transactions?',
       default: envDefaults.JITO_MODE
     },
     {
       type: 'number',
       name: 'JITO_FEE',
-      message: 'JITO fee (in lamports):',
+      message: '⚙️ [GENERAL] JITO fee (in lamports):',
       default: envDefaults.JITO_FEE,
       when: (answers: any) => answers.JITO_MODE,
       validate: (input: number) => {
@@ -349,7 +347,7 @@ export async function promptForConfiguration(): Promise<BotConfig> {
     {
       type: 'number',
       name: 'SLIPPAGE',
-      message: 'Slippage tolerance (0-100):',
+      message: '⚙️ [GENERAL] Slippage tolerance (0-100):',
       default: envDefaults.SLIPPAGE,
       validate: (input: number) => {
         if (input < 0 || input > 100) {
@@ -358,18 +356,18 @@ export async function promptForConfiguration(): Promise<BotConfig> {
         return true;
       }
     },
-    
-    // Gathering Configuration
+
+    // ⚙️ GENERAL - Gathering Configuration
     {
       type: 'confirm',
       name: 'GATHER_TO_OTHER_ADDRESS',
-      message: 'Gather to a different address?',
+      message: '⚙️ [GENERAL] Gather to a different address?',
       default: envDefaults.GATHER_TO_OTHER_ADDRESS
     },
     {
       type: 'input',
       name: 'GATHER_ADDRESS',
-      message: 'Enter the gather address:',
+      message: '⚙️ [GENERAL] Enter the gather address:',
       default: envDefaults.GATHER_ADDRESS,
       when: (answers: any) => answers.GATHER_TO_OTHER_ADDRESS,
       validate: (input: string) => {
@@ -379,15 +377,15 @@ export async function promptForConfiguration(): Promise<BotConfig> {
         return true;
       }
     },
-    
-    // Market Making Configuration
+
+    // 🟠 MARKET MAKER - PumpSwap Configuration (Optional - Required for Sell Bot)
     {
       type: 'input',
       name: 'TOKEN_MINT_PUMPSWAP',
-      message: 'Enter the PumpSwap token mint address:',
+      message: '🟠 [MARKET MAKER] Enter the PumpSwap token mint address (optional):',
       default: envDefaults.TOKEN_MINT_PUMPSWAP,
       validate: (input: string) => {
-        if (!input || input.length < 32) {
+        if (input && input.length < 32) {
           return 'Please enter a valid token mint address';
         }
         return true;
@@ -396,21 +394,33 @@ export async function promptForConfiguration(): Promise<BotConfig> {
     {
       type: 'input',
       name: 'POOL_ID_PUMPSWAP',
-      message: 'Enter the PumpSwap pool ID:',
+      message: '🟠 [MARKET MAKER] Enter the PumpSwap pool ID (optional):',
       default: envDefaults.POOL_ID_PUMPSWAP,
       validate: (input: string) => {
-        if (!input || input.length < 32) {
+        if (input && input.length < 32) {
           return 'Please enter a valid pool ID';
         }
         return true;
       }
     },
-    
-    // Market Maker - Buy Configuration
+    {
+      type: 'number',
+      name: 'BONDING_CURVE_THRESHOLD_SOL',
+      message: '🟠 [MARKET MAKER] Enter the bonding curve threshold (SOL):',
+      default: envDefaults.BONDING_CURVE_THRESHOLD_SOL,
+      validate: (input: number) => {
+        if (input <= 0) {
+          return 'Bonding curve threshold must be greater than 0';
+        }
+        return true;
+      }
+    },
+
+    // 🟠 MARKET MAKER - Buy Configuration
     {
       type: 'number',
       name: 'TOTAL_PERIOD_MIN',
-      message: 'Total period for market maker (minutes):',
+      message: '🟠 [MARKET MAKER] Total period for market maker (minutes):',
       default: envDefaults.TOTAL_PERIOD_MIN,
       validate: (input: number) => {
         if (input < 1) {
@@ -422,7 +432,7 @@ export async function promptForConfiguration(): Promise<BotConfig> {
     {
       type: 'number',
       name: 'BUY_INTERVAL_PERIOD_UNIT_SEC',
-      message: 'Buy interval period unit (seconds):',
+      message: '🟠 [MARKET MAKER] Buy interval period unit (seconds):',
       default: envDefaults.BUY_INTERVAL_PERIOD_UNIT_SEC,
       validate: (input: number) => {
         if (input < 1) {
@@ -433,20 +443,8 @@ export async function promptForConfiguration(): Promise<BotConfig> {
     },
     {
       type: 'number',
-      name: 'SOL_AMOUNT_TO_MARKET_MAKER_SOL',
-      message: 'SOL amount for market maker (SOL):',
-      default: envDefaults.SOL_AMOUNT_TO_MARKET_MAKER_SOL,
-      validate: (input: number) => {
-        if (input < 0) {
-          return 'SOL amount must be positive';
-        }
-        return true;
-      }
-    },
-    {
-      type: 'number',
       name: 'DISTRIBUTE_WALLET_NUM_MARKETMAKER',
-      message: 'Number of market maker wallets:',
+      message: '🟠 [MARKET MAKER] Number of market maker wallets:',
       default: envDefaults.DISTRIBUTE_WALLET_NUM_MARKETMAKER,
       validate: (input: number) => {
         if (input < 1 || input > 20) {
@@ -458,7 +456,7 @@ export async function promptForConfiguration(): Promise<BotConfig> {
     {
       type: 'number',
       name: 'DISTRIBUTE_DELTA_PERFECTAGE',
-      message: 'Distribution delta percentage (%):',
+      message: '🟠 [MARKET MAKER] Distribution delta percentage (%):',
       default: envDefaults.DISTRIBUTE_DELTA_PERFECTAGE,
       validate: (input: number) => {
         if (input < 0 || input > 100) {
@@ -469,34 +467,22 @@ export async function promptForConfiguration(): Promise<BotConfig> {
     },
     {
       type: 'number',
-      name: 'BUY_SELL_MOVE_TIME_MIN',
-      message: 'Buy/sell move time (minutes):',
-      default: envDefaults.BUY_SELL_MOVE_TIME_MIN,
+      name: 'ADDITIONAL_TIME_MIN',
+      message: '🟠 [MARKET MAKER] Additional time for extension (minutes, 0 = disabled):',
+      default: envDefaults.ADDITIONAL_TIME_MIN,
       validate: (input: number) => {
         if (input < 0) {
-          return 'Move time must be positive';
+          return 'Additional time must be 0 or positive';
         }
         return true;
       }
     },
-    
-    // Market Maker - Sell Configuration
-    {
-      type: 'number',
-      name: 'SELL_INTERVAL_PERIOD_UNIT_SEC',
-      message: 'Sell interval period unit (seconds):',
-      default: envDefaults.SELL_INTERVAL_PERIOD_UNIT_SEC,
-      validate: (input: number) => {
-        if (input < 1) {
-          return 'Sell interval must be at least 1 second';
-        }
-        return true;
-      }
-    },
+
+    // 🟠 MARKET MAKER - Sell Configuration
     {
       type: 'number',
       name: 'SELL_TOKEN_PERCENT',
-      message: 'Sell token percentage (%):',
+      message: '🟠 [MARKET MAKER] Sell token percentage (%):',
       default: envDefaults.SELL_TOKEN_PERCENT,
       validate: (input: number) => {
         if (input < 0 || input > 100) {
@@ -508,7 +494,7 @@ export async function promptForConfiguration(): Promise<BotConfig> {
     {
       type: 'number',
       name: 'SELL_TOKEN_DELTA_PERFECTAGE',
-      message: 'Sell token delta percentage (%):',
+      message: '🟠 [MARKET MAKER] Sell token delta percentage (%):',
       default: envDefaults.SELL_TOKEN_DELTA_PERFECTAGE,
       validate: (input: number) => {
         if (input < 0 || input > 100) {
@@ -520,7 +506,7 @@ export async function promptForConfiguration(): Promise<BotConfig> {
     {
       type: 'number',
       name: 'SELL_CONCURRENCY_PERCENT',
-      message: 'Sell concurrency percentage (%):',
+      message: '🟠 [MARKET MAKER] Sell concurrency percentage (%):',
       default: envDefaults.SELL_CONCURRENCY_PERCENT,
       validate: (input: number) => {
         if (input < 0 || input > 100) {
@@ -532,7 +518,7 @@ export async function promptForConfiguration(): Promise<BotConfig> {
     {
       type: 'number',
       name: 'SELL_CONCURRENCY_DELTA_PERFECTAGE',
-      message: 'Sell concurrency delta percentage (%):',
+      message: '🟠 [MARKET MAKER] Sell concurrency delta percentage (%):',
       default: envDefaults.SELL_CONCURRENCY_DELTA_PERFECTAGE,
       validate: (input: number) => {
         if (input < 0 || input > 100) {
@@ -544,7 +530,7 @@ export async function promptForConfiguration(): Promise<BotConfig> {
     {
       type: 'number',
       name: 'SELL_ITERATION_SLEEP_TIME_MIN',
-      message: 'Sell iteration sleep time (minutes):',
+      message: '🟠 [MARKET MAKER] Sell iteration sleep time (minutes):',
       default: envDefaults.SELL_ITERATION_SLEEP_TIME_MIN,
       validate: (input: number) => {
         if (input < 0) {
@@ -556,7 +542,7 @@ export async function promptForConfiguration(): Promise<BotConfig> {
     {
       type: 'number',
       name: 'SELL_ITERATION_SLEEP_TIME_DELTA_PERFECTAGE',
-      message: 'Sell iteration sleep delta percentage (%):',
+      message: '🟠 [MARKET MAKER] Sell iteration sleep delta percentage (%):',
       default: envDefaults.SELL_ITERATION_SLEEP_TIME_DELTA_PERFECTAGE,
       validate: (input: number) => {
         if (input < 0 || input > 100) {
@@ -597,18 +583,17 @@ export function displayConfiguration(config: BotConfig): void {
   console.log(`JITO Mode: ${config.JITO_MODE ? 'Enabled' : 'Disabled'}`);
   console.log(`Fee Level: ${config.FEE_LEVEL}`);
   console.log(`Gather to Other: ${config.GATHER_TO_OTHER_ADDRESS ? 'Yes' : 'No'}`);
-  
+
   console.log('\n🤖 Market Maker Configuration:');
   console.log('==============================');
   console.log(`PumpSwap Token: ${config.TOKEN_MINT_PUMPSWAP}`);
   console.log(`PumpSwap Pool: ${config.POOL_ID_PUMPSWAP}`);
+  console.log(`Bonding Curve Threshold: ${config.BONDING_CURVE_THRESHOLD_SOL} SOL`);
   console.log(`Total Period: ${config.TOTAL_PERIOD_MIN} min`);
   console.log(`Buy Interval Unit: ${config.BUY_INTERVAL_PERIOD_UNIT_SEC}s`);
-  console.log(`SOL for Market Maker: ${config.SOL_AMOUNT_TO_MARKET_MAKER_SOL} SOL`);
   console.log(`Market Maker Wallets: ${config.DISTRIBUTE_WALLET_NUM_MARKETMAKER}`);
   console.log(`Distribution Delta: ${config.DISTRIBUTE_DELTA_PERFECTAGE}%`);
-  console.log(`Move Time: ${config.BUY_SELL_MOVE_TIME_MIN} min`);
-  console.log(`Sell Interval Unit: ${config.SELL_INTERVAL_PERIOD_UNIT_SEC}s`);
+  console.log(`Additional Time: ${config.ADDITIONAL_TIME_MIN} min`);
   console.log(`Sell Token %: ${config.SELL_TOKEN_PERCENT}%`);
   console.log(`Sell Token Delta: ${config.SELL_TOKEN_DELTA_PERFECTAGE}%`);
   console.log(`Sell Concurrency: ${config.SELL_CONCURRENCY_PERCENT}%`);

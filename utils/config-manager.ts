@@ -114,6 +114,9 @@ export const config = {
   get POOL_ID_PUMPSWAP(): string {
     return getConfigValue('POOL_ID_PUMPSWAP');
   },
+  get BONDING_CURVE_THRESHOLD_SOL(): number {
+    return getConfigValue('BONDING_CURVE_THRESHOLD_SOL');
+  },
   
   // Market Maker - Buy Configuration
   get TOTAL_PERIOD_MIN(): number {
@@ -122,23 +125,17 @@ export const config = {
   get BUY_INTERVAL_PERIOD_UNIT_SEC(): number {
     return getConfigValue('BUY_INTERVAL_PERIOD_UNIT_SEC');
   },
-  get SOL_AMOUNT_TO_MARKET_MAKER_SOL(): number {
-    return getConfigValue('SOL_AMOUNT_TO_MARKET_MAKER_SOL');
-  },
   get DISTRIBUTE_WALLET_NUM_MARKETMAKER(): number {
     return getConfigValue('DISTRIBUTE_WALLET_NUM_MARKETMAKER');
   },
   get DISTRIBUTE_DELTA_PERFECTAGE(): number {
     return getConfigValue('DISTRIBUTE_DELTA_PERFECTAGE');
   },
-  get BUY_SELL_MOVE_TIME_MIN(): number {
-    return getConfigValue('BUY_SELL_MOVE_TIME_MIN');
+  get ADDITIONAL_TIME_MIN(): number {
+    return getConfigValue('ADDITIONAL_TIME_MIN');
   },
   
   // Market Maker - Sell Configuration
-  get SELL_INTERVAL_PERIOD_UNIT_SEC(): number {
-    return getConfigValue('SELL_INTERVAL_PERIOD_UNIT_SEC');
-  },
   get SELL_TOKEN_PERCENT(): number {
     return getConfigValue('SELL_TOKEN_PERCENT');
   },

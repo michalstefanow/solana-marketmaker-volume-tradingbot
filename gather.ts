@@ -16,7 +16,10 @@ const main = async (filename: string = "") => {
   const walletsData = readJson(filename)
 
   const wallets = walletsData.map(({ privateKey }) => Keypair.fromSecretKey(base58.decode(privateKey)))
-  wallets.map(async (kp, i) => {
+  // wallets.map(async (kp, i) => {
+  let i = 0;
+  for(const kp of wallets) {
+    i++;
     try {
       const solBalance = await connection.getBalance(kp.publicKey)
       if (solBalance > 0)
@@ -140,14 +143,17 @@ const main = async (filename: string = "") => {
           const walletsData = readJson(filename)
           const wallets = walletsData.filter(({ privateKey }) => base58.encode(kp.secretKey) != privateKey)
           saveNewFile(wallets)
-          console.log("saved ==> ")
+          console.log("Wallet ", kp.publicKey.toBase58(), " is completed")
         }
       }
     } catch (error) {
       console.log("transaction error while gathering", error)
       return
     }
-  })
+  }
+
+  console.log("All wallets are completed in ", filename, " file");
+  console.log("============================================================================ \n")
 }
 
 // Export main function for CLI usage

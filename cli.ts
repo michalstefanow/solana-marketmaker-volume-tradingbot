@@ -261,14 +261,15 @@ async function manageBot() {
       type: 'list',
       name: 'action',
       message: 'What would you like to do?',
-      choices: [
-        { name: '🚀 Launch Bot (Start buying and selling)', value: 'launch' },
-        { name: '💰 Launch Sell Bot (Start selling only)', value: 'sell' },
-        { name: '⏹️  Stop Bot', value: 'stop', disabled: !isBotRunning ? 'No bot running' : false },
-        { name: '📊 Bot Status', value: 'status' },
-        { name: '💸 Collect All SOL', value: 'collect' },
-        { name: '🔙 Back to Main Menu', value: 'back' }
-      ]
+        choices: [
+          { name: '🚀 Launch Bot (Start buying and selling)', value: 'launch' },
+          { name: '💰 Launch Sell Bot (Start selling only)', value: 'sell' },
+          { name: '⏹️  Stop Bot', value: 'stop', disabled: !isBotRunning ? 'No bot running' : false },
+          { name: '⏰ Extend Bot Runtime', value: 'extend', disabled: !isBotRunning ? 'No bot running' : false },
+          { name: '📊 Bot Status', value: 'status' },
+          { name: '💸 Collect All SOL', value: 'collect' },
+          { name: '🔙 Back to Main Menu', value: 'back' }
+        ]
     }
   ]);
 
@@ -281,6 +282,9 @@ async function manageBot() {
       break;
     case 'stop':
       await stopBot();
+      break;
+    case 'extend':
+      await extendBotRuntime();
       break;
     case 'status':
       await showBotStatus();
@@ -309,6 +313,32 @@ async function launchVolumeBot() {
     } catch (error) {
       console.log('\n🔄 Loading configuration...');
       setGlobalConfig(savedConfig.config, false);
+    }
+    
+    // Ask if user wants to update parameters before launching
+    const { updateParams } = await inquirer.prompt([
+      {
+        type: 'list',
+        name: 'updateParams',
+        message: 'Would you like to update parameters before launching?',
+        choices: [
+          { name: '🔵 Update Volume Bot parameters only', value: 'volume' },
+          { name: '🟠 Update Market Maker parameters only', value: 'marketmaker' },
+          { name: '🔄 Update both Volume Bot and Market Maker parameters', value: 'both' },
+          { name: '▶️ Launch with current parameters', value: 'launch' }
+        ]
+      }
+    ]);
+    
+    if (updateParams === 'volume') {
+      await updateVolumeBotConfiguration();
+      return;
+    } else if (updateParams === 'marketmaker') {
+      await updateMarketMakerConfiguration();
+      return;
+    } else if (updateParams === 'both') {
+      await updateVolumeBotConfiguration();
+      return;
     }
     
     console.log('\n🚀 Launching Volume Bot...');
@@ -358,6 +388,45 @@ async function launchSellBot() {
       setGlobalConfig(savedConfig.config, false);
     }
     
+    // Check if PumpSwap configuration is available
+    const currentConfig = getGlobalConfig();
+    if (!currentConfig.TOKEN_MINT_PUMPSWAP || !currentConfig.POOL_ID_PUMPSWAP) {
+      console.log('\n⚠️  PumpSwap configuration is required for Sell Bot!');
+      console.log('Missing: TOKEN_MINT_PUMPSWAP or POOL_ID_PUMPSWAP');
+      
+      const { updateConfig } = await inquirer.prompt([
+        {
+          type: 'confirm',
+          name: 'updateConfig',
+          message: 'Would you like to update the sell bot configuration now?',
+          default: true
+        }
+      ]);
+      
+      if (updateConfig) {
+        await updateSellBotConfiguration();
+        return; // Restart the function after updating config
+      } else {
+        console.log('❌ Cannot launch Sell Bot without PumpSwap configuration.\n');
+        return;
+      }
+    }
+    
+    // Ask if user wants to update sell parameters
+    const { updateParams } = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'updateParams',
+        message: 'Would you like to update sell bot parameters before launching?',
+        default: false
+      }
+    ]);
+    
+    if (updateParams) {
+      await updateSellBotConfiguration();
+      return; // Restart the function after updating config
+    }
+    
     console.log('\n💰 Launching Sell Bot...');
     console.log('This will start selling tokens from distributed wallets.\n');
     
@@ -387,7 +456,7 @@ async function stopBot() {
       botAbortController.abort();
       
       // Wait a moment for graceful shutdown
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 10000));
       
       // Reset state
       isBotRunning = false;
@@ -395,7 +464,7 @@ async function stopBot() {
       currentBotType = '';
       botAbortController = null;
       
-      console.log('✅ Bot stopped successfully!');
+      console.log('✅ Bot will be stopped on next iteration...');
     } catch (error) {
       console.error('❌ Error stopping bot:', error);
       // Force reset state even if there was an error
@@ -438,7 +507,6 @@ async function collectAllSOL() {
       message: 'Choose collection method:',
       choices: [
         { name: '🔄 Collect with Sell (Sell tokens first, then collect SOL)', value: 'with-sell' },
-        { name: '📦 Collect without Sell (Collect tokens and SOL directly)', value: 'without-sell' },
         { name: '🔙 Back to Bot Management', value: 'back' }
       ]
     }
@@ -447,9 +515,6 @@ async function collectAllSOL() {
   switch (action) {
     case 'with-sell':
       await collectWithSell();
-      break;
-    case 'without-sell':
-      await collectWithoutSell();
       break;
     case 'back':
       return;
@@ -479,36 +544,11 @@ async function collectWithSell() {
     
     const { main: gatherMain } = await import('./gather');
     await gatherMain("market_maker_data.json");
-    
-    console.log('✅ Collection completed!');
-  } catch (error) {
-    console.error('❌ Error during collection:', error);
-  }
-}
+    await gatherMain("data.json");
 
-async function collectWithoutSell() {
-  try {
-    // Validate configuration before collecting
-    const savedConfig = loadConfigFromFile();
-    if (!savedConfig) {
-      console.log('\n❌ Configuration file not found!');
-      console.log('Please initialize configuration first.\n');
-      return;
-    }
-    
-    // Ensure global config is loaded
-    try {
-      getGlobalConfig();
-    } catch (error) {
-      console.log('\n🔄 Loading configuration...');
-      setGlobalConfig(savedConfig.config, false);
-    }
-    
-    console.log('\n📦 Starting collection without sell...');
-    console.log('This will collect tokens and SOL directly without selling.\n');
-    
-    const { main: gatherNoSellMain } = await import('./gather_without_sell');
-    await gatherNoSellMain();
+    console.log("Collect with Sell is completed..");
+    console.log("============================================================================ \n")
+    console.log("============================================================================ \n")
     
     console.log('✅ Collection completed!');
   } catch (error) {
@@ -794,6 +834,438 @@ async function viewSOLSpent() {
   } catch (error) {
     console.error('❌ Error fetching SOL info:', error);
   }
+}
+
+async function extendBotRuntime() {
+  console.log('\n⏰ Extend Bot Runtime');
+  console.log('====================\n');
+  
+  if (!isBotRunning) {
+    console.log('❌ No bot is currently running. Please start a bot first.\n');
+    return;
+  }
+  
+  const currentConfig = getGlobalConfig();
+  
+  const { additionalMinutes } = await inquirer.prompt([
+    {
+      type: 'number',
+      name: 'additionalMinutes',
+      message: '⏰ How many additional minutes would you like to add?',
+      default: 0,
+      validate: (input: number) => {
+        if (input < 0) {
+          return 'Additional minutes must be 0 or positive';
+        }
+        if (input > 1440) { // 24 hours max
+          return 'Additional minutes cannot exceed 1440 (24 hours)';
+        }
+        return true;
+      }
+    }
+  ]);
+  
+  if (additionalMinutes <= 0) {
+    console.log('❌ No additional time specified. Operation cancelled.\n');
+    return;
+  }
+  
+  // Update the configuration with additional time
+  const updatedConfig = {
+    ...currentConfig,
+    ADDITIONAL_TIME_MIN: additionalMinutes
+  };
+  
+  setGlobalConfig(updatedConfig, true);
+
+  const currentConfigAfterUpdate = getGlobalConfig();
+  
+  console.log("\n[MARKET MAKER] currentConfigAfterUpdate ==> ", currentConfigAfterUpdate);
+  console.log(`\n✅ Bot runtime extended by ${additionalMinutes} minutes!`);
+  console.log(`💡 The additional time will be applied during the next bot iteration check.`);
+  console.log(`💡 If bot is running, it will be extended automatically within 5 iterations.\n`);
+}
+
+async function updateVolumeBotConfiguration() {
+  console.log('\n🔵 Updating Volume Bot Configuration');
+  console.log('====================================\n');
+  
+  const currentConfig = getGlobalConfig();
+  
+  const answers = await inquirer.prompt([
+    // Volume Bot Configuration
+    {
+      type: 'input',
+      name: 'TOKEN_MINT',
+      message: '🔵 [VOLUME BOT] Enter the token mint address to trade:',
+      default: currentConfig.TOKEN_MINT,
+      validate: (input: string) => {
+        if (!input || input.length < 32) {
+          return 'Please enter a valid token mint address';
+        }
+        return true;
+      }
+    },
+    {
+      type: 'input',
+      name: 'POOL_ID',
+      message: '🔵 [VOLUME BOT] Enter the pool ID:',
+      default: currentConfig.POOL_ID,
+      validate: (input: string) => {
+        if (!input || input.length < 32) {
+          return 'Please enter a valid pool ID';
+        }
+        return true;
+      }
+    },
+    {
+      type: 'number',
+      name: 'BUY_INTERVAL_MIN',
+      message: '🔵 [VOLUME BOT] Minimum buy interval (seconds):',
+      default: currentConfig.BUY_INTERVAL_MIN,
+      validate: (input: number) => {
+        if (input < 1) {
+          return 'Buy interval must be at least 1 second';
+        }
+        return true;
+      }
+    },
+    {
+      type: 'number',
+      name: 'BUY_INTERVAL_MAX',
+      message: '🔵 [VOLUME BOT] Maximum buy interval (seconds):',
+      default: currentConfig.BUY_INTERVAL_MAX,
+      validate: (input: number) => {
+        if (input < 1) {
+          return 'Buy interval must be at least 1 second';
+        }
+        return true;
+      }
+    },
+    {
+      type: 'number',
+      name: 'BUY_LOWER_PERCENT',
+      message: '🔵 [VOLUME BOT] Buy lower percentage (0-100):',
+      default: currentConfig.BUY_LOWER_PERCENT,
+      validate: (input: number) => {
+        if (input < 0 || input > 100) {
+          return 'Percentage must be between 0 and 100';
+        }
+        return true;
+      }
+    },
+    {
+      type: 'number',
+      name: 'BUY_UPPER_PERCENT',
+      message: '🔵 [VOLUME BOT] Buy upper percentage (0-100):',
+      default: currentConfig.BUY_UPPER_PERCENT,
+      validate: (input: number) => {
+        if (input < 0 || input > 100) {
+          return 'Percentage must be between 0 and 100';
+        }
+        return true;
+      }
+    },
+    {
+      type: 'number',
+      name: 'SELL_INTERVAL_MIN',
+      message: '🔵 [VOLUME BOT] Minimum sell interval (seconds):',
+      default: currentConfig.SELL_INTERVAL_MIN,
+      validate: (input: number) => {
+        if (input < 1) {
+          return 'Sell interval must be at least 1 second';
+        }
+        return true;
+      }
+    },
+    {
+      type: 'number',
+      name: 'SELL_INTERVAL_MAX',
+      message: '🔵 [VOLUME BOT] Maximum sell interval (seconds):',
+      default: currentConfig.SELL_INTERVAL_MAX,
+      validate: (input: number) => {
+        if (input < 1) {
+          return 'Sell interval must be at least 1 second';
+        }
+        return true;
+      }
+    },
+    {
+      type: 'number',
+      name: 'DISTRIBUTE_WALLET_NUM',
+      message: '🔵 [VOLUME BOT] Number of wallets to distribute to:',
+      default: currentConfig.DISTRIBUTE_WALLET_NUM,
+      validate: (input: number) => {
+        if (input < 1 || input > 20) {
+          return 'Number of wallets must be between 1 and 20';
+        }
+        return true;
+      }
+    },
+    {
+      type: 'number',
+      name: 'SOL_AMOUNT_TO_DISTRIBUTE',
+      message: '🔵 [VOLUME BOT] SOL amount to distribute (total):',
+      default: currentConfig.SOL_AMOUNT_TO_DISTRIBUTE,
+      validate: (input: number) => {
+        if (input <= 0) {
+          return 'SOL amount must be greater than 0';
+        }
+        return true;
+      }
+    },
+    {
+      type: 'number',
+      name: 'DISTRIBUTE_INTERVAL_MIN',
+      message: '🔵 [VOLUME BOT] Minimum distribution interval (seconds):',
+      default: currentConfig.DISTRIBUTE_INTERVAL_MIN,
+      validate: (input: number) => {
+        if (input < 1) {
+          return 'Distribution interval must be at least 1 second';
+        }
+        return true;
+      }
+    },
+    {
+      type: 'number',
+      name: 'DISTRIBUTE_INTERVAL_MAX',
+      message: '🔵 [VOLUME BOT] Maximum distribution interval (seconds):',
+      default: currentConfig.DISTRIBUTE_INTERVAL_MAX,
+      validate: (input: number) => {
+        if (input < 1) {
+          return 'Distribution interval must be at least 1 second';
+        }
+        return true;
+      }
+    }
+  ]);
+  
+  // Update the configuration
+  const updatedConfig = {
+    ...currentConfig,
+    ...answers
+  };
+  
+  setGlobalConfig(updatedConfig, true);
+  console.log('\n✅ Volume Bot configuration updated successfully!');
+  
+  // Restart the volume bot launch process
+  await launchVolumeBot();
+}
+
+async function updateMarketMakerConfiguration() {
+  console.log('\n🟠 Updating Market Maker Configuration');
+  console.log('======================================\n');
+  
+  const currentConfig = getGlobalConfig();
+  
+  const answers = await inquirer.prompt([
+    // Market Maker Configuration
+    {
+      type: 'number',
+      name: 'BONDING_CURVE_THRESHOLD_SOL',
+      message: '🟠 [MARKET MAKER] Enter the bonding curve threshold (SOL):',
+      default: currentConfig.BONDING_CURVE_THRESHOLD_SOL,
+      validate: (input: number) => {
+        if (input <= 0) {
+          return 'Bonding curve threshold must be greater than 0';
+        }
+        return true;
+      }
+    },
+    {
+      type: 'number',
+      name: 'TOTAL_PERIOD_MIN',
+      message: '🟠 [MARKET MAKER] Total period for market maker (minutes):',
+      default: currentConfig.TOTAL_PERIOD_MIN,
+      validate: (input: number) => {
+        if (input < 1) {
+          return 'Total period must be at least 1 minute';
+        }
+        return true;
+      }
+    },
+    {
+      type: 'number',
+      name: 'BUY_INTERVAL_PERIOD_UNIT_SEC',
+      message: '🟠 [MARKET MAKER] Buy interval period unit (seconds):',
+      default: currentConfig.BUY_INTERVAL_PERIOD_UNIT_SEC,
+      validate: (input: number) => {
+        if (input < 1) {
+          return 'Buy interval must be at least 1 second';
+        }
+        return true;
+      }
+    },
+    {
+      type: 'number',
+      name: 'DISTRIBUTE_WALLET_NUM_MARKETMAKER',
+      message: '🟠 [MARKET MAKER] Number of market maker wallets:',
+      default: currentConfig.DISTRIBUTE_WALLET_NUM_MARKETMAKER,
+      validate: (input: number) => {
+        if (input < 1 || input > 20) {
+          return 'Number of wallets must be between 1 and 20';
+        }
+        return true;
+      }
+    },
+    {
+      type: 'number',
+      name: 'DISTRIBUTE_DELTA_PERFECTAGE',
+      message: '🟠 [MARKET MAKER] Distribution delta percentage (%):',
+      default: currentConfig.DISTRIBUTE_DELTA_PERFECTAGE,
+      validate: (input: number) => {
+        if (input < 0 || input > 100) {
+          return 'Delta percentage must be between 0 and 100';
+        }
+        return true;
+      }
+    },
+    {
+      type: 'number',
+      name: 'ADDITIONAL_TIME_MIN',
+      message: '🟠 [MARKET MAKER] Additional time for extension (minutes, 0 = disabled):',
+      default: currentConfig.ADDITIONAL_TIME_MIN,
+      validate: (input: number) => {
+        if (input < 0) {
+          return 'Additional time must be 0 or positive';
+        }
+        return true;
+      }
+    }
+  ]);
+  
+  // Update the configuration
+  const updatedConfig = {
+    ...currentConfig,
+    ...answers
+  };
+  
+  setGlobalConfig(updatedConfig, true);
+  console.log('\n✅ Market Maker configuration updated successfully!');
+  
+  // Restart the volume bot launch process (since it includes both Volume Bot and Market Maker)
+  await launchVolumeBot();
+}
+
+async function updateSellBotConfiguration() {
+  console.log('\n🟠 Updating Sell Bot Configuration');
+  console.log('==================================\n');
+  
+  const currentConfig = getGlobalConfig();
+  
+  const answers = await inquirer.prompt([
+    // PumpSwap Configuration (Required for Sell Bot)
+    {
+      type: 'input',
+      name: 'TOKEN_MINT_PUMPSWAP',
+      message: '🟠 [MARKET MAKER] Enter the PumpSwap token mint address:',
+      default: currentConfig.TOKEN_MINT_PUMPSWAP,
+      validate: (input: string) => {
+        if (!input || input.length < 32) {
+          return 'Please enter a valid token mint address';
+        }
+        return true;
+      }
+    },
+    {
+      type: 'input',
+      name: 'POOL_ID_PUMPSWAP',
+      message: '🟠 [MARKET MAKER] Enter the PumpSwap pool ID:',
+      default: currentConfig.POOL_ID_PUMPSWAP,
+      validate: (input: string) => {
+        if (!input || input.length < 32) {
+          return 'Please enter a valid pool ID';
+        }
+        return true;
+      }
+    },
+    
+    {
+      type: 'number',
+      name: 'SELL_TOKEN_PERCENT',
+      message: '🟠 [MARKET MAKER] Sell token percentage (%):',
+      default: currentConfig.SELL_TOKEN_PERCENT,
+      validate: (input: number) => {
+        if (input < 0 || input > 100) {
+          return 'Sell percentage must be between 0 and 100';
+        }
+        return true;
+      }
+    },
+    {
+      type: 'number',
+      name: 'SELL_TOKEN_DELTA_PERFECTAGE',
+      message: '🟠 [MARKET MAKER] Sell token delta percentage (%):',
+      default: currentConfig.SELL_TOKEN_DELTA_PERFECTAGE,
+      validate: (input: number) => {
+        if (input < 0 || input > 100) {
+          return 'Delta percentage must be between 0 and 100';
+        }
+        return true;
+      }
+    },
+    {
+      type: 'number',
+      name: 'SELL_CONCURRENCY_PERCENT',
+      message: '🟠 [MARKET MAKER] Sell concurrency percentage (%):',
+      default: currentConfig.SELL_CONCURRENCY_PERCENT,
+      validate: (input: number) => {
+        if (input < 0 || input > 100) {
+          return 'Concurrency percentage must be between 0 and 100';
+        }
+        return true;
+      }
+    },
+    {
+      type: 'number',
+      name: 'SELL_CONCURRENCY_DELTA_PERFECTAGE',
+      message: '🟠 [MARKET MAKER] Sell concurrency delta percentage (%):',
+      default: currentConfig.SELL_CONCURRENCY_DELTA_PERFECTAGE,
+      validate: (input: number) => {
+        if (input < 0 || input > 100) {
+          return 'Delta percentage must be between 0 and 100';
+        }
+        return true;
+      }
+    },
+    {
+      type: 'number',
+      name: 'SELL_ITERATION_SLEEP_TIME_MIN',
+      message: '🟠 [MARKET MAKER] Sell iteration sleep time (minutes):',
+      default: currentConfig.SELL_ITERATION_SLEEP_TIME_MIN,
+      validate: (input: number) => {
+        if (input < 0) {
+          return 'Sleep time must be positive';
+        }
+        return true;
+      }
+    },
+    {
+      type: 'number',
+      name: 'SELL_ITERATION_SLEEP_TIME_DELTA_PERFECTAGE',
+      message: '🟠 [MARKET MAKER] Sell iteration sleep delta percentage (%):',
+      default: currentConfig.SELL_ITERATION_SLEEP_TIME_DELTA_PERFECTAGE,
+      validate: (input: number) => {
+        if (input < 0 || input > 100) {
+          return 'Delta percentage must be between 0 and 100';
+        }
+        return true;
+      }
+    }
+  ]);
+  
+  // Update the configuration
+  const updatedConfig = {
+    ...currentConfig,
+    ...answers
+  };
+  
+  setGlobalConfig(updatedConfig, true);
+  console.log('\n✅ Sell Bot configuration updated successfully!');
+  
+  // Restart the sell bot launch process
+  await launchSellBot();
 }
 
 async function handleExit() {
