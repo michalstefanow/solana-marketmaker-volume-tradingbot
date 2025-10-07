@@ -776,7 +776,6 @@ async function showStatistics() {
       message: 'What would you like to view?',
       choices: [
         { name: '💰 View Market Cap & Token Value', value: 'market' },
-        { name: '💸 View Total SOL Spent', value: 'spent' },
         { name: '🔙 Back to Main Menu', value: 'back' }
       ]
     }
@@ -786,22 +785,8 @@ async function showStatistics() {
     case 'market':
       await viewMarketInfo();
       break;
-    case 'spent':
-      await viewSOLSpent();
-      break;
     case 'back':
       return;
-  }
-}
-
-async function viewAllParameters() {
-  try {
-    const config = getGlobalConfig();
-    console.log('\n📋 All Configuration Parameters');
-    console.log('===============================');
-    displayConfiguration(config);
-  } catch (error) {
-    console.error('❌ Error loading parameters:', error);
   }
 }
 
