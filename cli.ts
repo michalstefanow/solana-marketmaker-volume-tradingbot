@@ -4,12 +4,14 @@ import { displaySavedConfigInfo } from './utils/config-persistence';
 import inquirer from 'inquirer';
 import { Connection, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import base58 from 'bs58';
+import { bondingCurveStatics, getTokenMint } from './utils/pumpfun';
 
 // Global state
 let isBotRunning = false;
 let currentBotProcess: any = null;
 let currentBotType: string = '';
 let botAbortController: AbortController | null = null;
+let botStartTime: Date | null = null;
 
 async function main() {
   console.log('🎯 PumpFun Volume Bot - Advanced CLI');
@@ -67,10 +69,9 @@ async function showMainMenu(config: any) {
       choices: [
         { name: '1️⃣  Initialize/Reload Configuration', value: 'init' },
         { name: '2️⃣  Manage Bot', value: 'manage', disabled: !currentConfig ? 'Please configure first' : false },
-        { name: '3️⃣  Manage Timing & Speed', value: 'timing', disabled: !currentConfig ? 'Please configure first' : false },
-        { name: '4️⃣  Statistics & Monitoring', value: 'stats', disabled: !currentConfig ? 'Please configure first' : false },
-        { name: '5️⃣  Configuration Management', value: 'config-mgmt' },
-        { name: '6️⃣  Exit', value: 'exit' }
+        { name: '3️⃣  Statistics & Monitoring', value: 'stats', disabled: !currentConfig ? 'Please configure first' : false },
+        { name: '4️⃣  Configuration Management', value: 'config-mgmt' },
+        { name: '5️⃣  Exit', value: 'exit' }
       ]
     }
   ]);
@@ -80,9 +81,6 @@ async function showMainMenu(config: any) {
       return await initializeConfiguration();
     case 'manage':
       await validateAndRunBotOperation(() => manageBot());
-      break;
-    case 'timing':
-      await validateAndRunBotOperation(() => manageTiming());
       break;
     case 'stats':
       await validateAndRunBotOperation(() => showStatistics());
@@ -352,6 +350,7 @@ async function launchVolumeBot() {
     const { VolumeBot, MarketMakerForBuy } = await import('./index');
     isBotRunning = true;
     currentBotType = 'Volume Bot + Market Maker';
+    botStartTime = new Date();
     
     // Run both functions in parallel with abort signal
     const volumeBotPromise = VolumeBot(botAbortController.signal);
@@ -436,6 +435,7 @@ async function launchSellBot() {
     const { MarketMakerForSell } = await import('./index');
     isBotRunning = true;
     currentBotType = 'Sell Bot';
+    botStartTime = new Date();
     currentBotProcess = MarketMakerForSell(botAbortController.signal);
     
     console.log('✅ Sell Bot started successfully!');
@@ -463,6 +463,7 @@ async function stopBot() {
       currentBotProcess = null;
       currentBotType = '';
       botAbortController = null;
+      botStartTime = null;
       
       console.log('✅ Bot will be stopped on next iteration...');
     } catch (error) {
@@ -472,6 +473,7 @@ async function stopBot() {
       currentBotProcess = null;
       currentBotType = '';
       botAbortController = null;
+      botStartTime = null;
     }
   } else {
     console.log('❌ No bot is currently running');
@@ -484,6 +486,24 @@ async function showBotStatus() {
   console.log(`Status: ${isBotRunning ? '🟢 Running' : '🔴 Stopped'}`);
   if (isBotRunning) {
     console.log(`Type: ${currentBotType}`);
+    
+    if (botStartTime) {
+      const now = new Date();
+      const diffMs = now.getTime() - botStartTime.getTime();
+      const diffMinutes = Math.floor(diffMs / 60000);
+      const diffSeconds = Math.floor((diffMs % 60000) / 1000);
+      const diffHours = Math.floor(diffMinutes / 60);
+      const remainingMinutes = diffMinutes % 60;
+      
+      if (diffHours > 0) {
+        console.log(`Running Time: ${diffHours}h ${remainingMinutes}m ${diffSeconds}s`);
+      } else if (diffMinutes > 0) {
+        console.log(`Running Time: ${diffMinutes}m ${diffSeconds}s`);
+      } else {
+        console.log(`Running Time: ${diffSeconds}s`);
+      }
+    }
+    
     console.log('💡 Use "Stop Bot" to halt the bot');
   }
   console.log('');
@@ -755,7 +775,6 @@ async function showStatistics() {
       name: 'action',
       message: 'What would you like to view?',
       choices: [
-        { name: '📋 View All Parameters', value: 'parameters' },
         { name: '💰 View Market Cap & Token Value', value: 'market' },
         { name: '💸 View Total SOL Spent', value: 'spent' },
         { name: '🔙 Back to Main Menu', value: 'back' }
@@ -764,9 +783,6 @@ async function showStatistics() {
   ]);
 
   switch (action) {
-    case 'parameters':
-      await viewAllParameters();
-      break;
     case 'market':
       await viewMarketInfo();
       break;
@@ -795,16 +811,20 @@ async function viewMarketInfo() {
     console.log('\n💰 Market Information');
     console.log('=====================');
     
-    const connection = new Connection(config.RPC_ENDPOINT, 'confirmed');
-    const tokenMint = new PublicKey(config.TOKEN_MINT);
-    
     console.log(`Token Mint: ${config.TOKEN_MINT}`);
     console.log(`Pool ID: ${config.POOL_ID}`);
+
+    const tokenMint = await getTokenMint(new PublicKey(config.TOKEN_MINT));
     
     // Note: In a real implementation, you would fetch actual market data
-    console.log('📈 Market Cap: Calculating...');
-    console.log('💎 Token Value: Calculating...');
-    console.log('💡 This feature requires integration with market data APIs');
+    const bondingCurveAccount = await bondingCurveStatics("pumpfun");
+    if (!bondingCurveAccount) {
+      console.log('❌ Error fetching bonding curve account');
+      return;
+    }
+    console.log(`Bonding Curve Balance: ${Number(bondingCurveAccount.virtualSolReserves) / 10 ** 9} SOL`);
+    console.log(`Bonding Curve Market Cap: ${Number(bondingCurveAccount.getMarketCapSOL()) / 10 ** 9} SOL`);
+    console.log(`Token Price: ${Number(bondingCurveAccount.realTokenReserves * BigInt(10 ** tokenMint.decimals) / bondingCurveAccount.virtualSolReserves * BigInt(10 ** 9))} SOL`);
   } catch (error) {
     console.error('❌ Error fetching market info:', error);
   }

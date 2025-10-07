@@ -1,5 +1,4 @@
 import { Connection, VersionedTransaction } from "@solana/web3.js";
-import { RPC_ENDPOINT, RPC_WEBSOCKET_ENDPOINT } from "../constants";
 
 interface Blockhash {
   blockhash: string;
@@ -7,6 +6,9 @@ interface Blockhash {
 }
 
 export const execute = async (transaction: VersionedTransaction, latestBlockhash: Blockhash, isBuy: boolean | 1 = true) => {
+  // Import constants inside function to avoid initialization errors
+  const { RPC_ENDPOINT, RPC_WEBSOCKET_ENDPOINT } = require("../constants");
+  
   const solanaConnection = new Connection(RPC_ENDPOINT, {
     wsEndpoint: RPC_WEBSOCKET_ENDPOINT,
   })
