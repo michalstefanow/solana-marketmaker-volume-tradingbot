@@ -9,6 +9,7 @@ import { BondingCurveAccount } from "./bondingCurveAccount";
 import { PumpAmm } from "../contract/pumpswap-types";
 import PumpswapIDL from '../contract/pumpswap-idl.json'
 import { Metaplex } from "@metaplex-foundation/js";
+import { getGlobalConfig } from "./config-manager";
 
 // Lazy initialization to avoid config errors on import
 let _solanaConnection: Connection | null = null;
@@ -53,18 +54,9 @@ function getPumpswapProgram() {
   return _PumpswapProgram;
 }
 
-function getPool() {
-  if (!_pool) {
-    const { POOL_ID } = getConstants();
-    _pool = new PublicKey(POOL_ID);
-    console.log("pool ==> ", _pool);
-  }
-  return _pool;
-}
-
 function getPoolPumpswap() {
   if (!_poolPumpswap) {
-    const { POOL_ID_PUMPSWAP } = getConstants();
+    const { POOL_ID_PUMPSWAP } = getGlobalConfig();
     _poolPumpswap = new PublicKey(POOL_ID_PUMPSWAP);
   }
   return _poolPumpswap;

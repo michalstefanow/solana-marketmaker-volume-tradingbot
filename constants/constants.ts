@@ -28,8 +28,6 @@ export const SLIPPAGE = config.SLIPPAGE
 export const FEE_LEVEL = config.FEE_LEVEL
 
 export const TOKEN_MINT = config.TOKEN_MINT
-export const POOL_ID = config.POOL_ID
-
 
 // gather part
 export const GATHER_TO_OTHER_ADDRESS = config.GATHER_TO_OTHER_ADDRESS
@@ -42,8 +40,6 @@ export const GLOBAL_MINT = new PublicKey("p89evAyzjd9fphjJx7G3RFA48sbZdpGEppRcfR
 
 //  ========= Volume Bot =========
 export const BONDING_CURVE_THRESHOLD_SOL = config.BONDING_CURVE_THRESHOLD_SOL;
-export const TOKEN_MINT_PUMPSWAP = config.TOKEN_MINT_PUMPSWAP;
-export const POOL_ID_PUMPSWAP = config.POOL_ID_PUMPSWAP;
 
 //  == Market Maker Configuration (from CLI)
 // Buy Configuration

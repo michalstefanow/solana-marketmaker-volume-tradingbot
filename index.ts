@@ -40,16 +40,14 @@ import {
   DISTRIBUTE_DELTA_PERFECTAGE,
   BUY_INTERVAL_PERIOD_UNIT_SEC,
   TOTAL_PERIOD_MIN,
-  ADDITIONAL_TIME_MIN,
   SELL_CONCURRENCY_PERCENT,
   SELL_CONCURRENCY_DELTA_PERFECTAGE,
   SELL_TOKEN_PERCENT,
   SELL_TOKEN_DELTA_PERFECTAGE,
   SELL_ITERATION_SLEEP_TIME_MIN,
   SELL_ITERATION_SLEEP_TIME_DELTA_PERFECTAGE,
-  TOKEN_MINT_PUMPSWAP,
 } from './constants'
-import { Data, readJson, saveDataToFile, saveNewFile, sleep } from './utils'
+import { config, Data, readJson, saveDataToFile, saveNewFile, sleep } from './utils'
 import base58 from 'bs58'
 import { execute } from './executor/legacy'
 import { executeJitoTx } from './executor/jito'
@@ -61,7 +59,7 @@ export const solanaConnection = new Connection(RPC_ENDPOINT, {
 
 const mainKp = Keypair.fromSecretKey(base58.decode(PRIVATE_KEY))
 const baseMint = new PublicKey(TOKEN_MINT);
-const baseMintPumpswap = new PublicKey(TOKEN_MINT_PUMPSWAP);
+const baseMintPumpswap = new PublicKey(config.TOKEN_MINT_PUMPSWAP);
 const distritbutionNum = DISTRIBUTE_WALLET_NUM > 20 ? 20 : DISTRIBUTE_WALLET_NUM
 const jitoCommitment: Commitment = "confirmed"
 
@@ -98,7 +96,7 @@ const buy = async (newWallet: Keypair, baseMint: PublicKey, buyAmount: number, i
       txSig = await executeJitoTx([buyTx], mainKp, jitoCommitment)
     } else {
       const latestBlockhash = await solanaConnection.getLatestBlockhash()
-      txSig = await execute(buyTx, latestBlockhash, 1)
+      txSig = await execute(buyTx, latestBlockhash, 1, isVolumeBot)
     }
     if (txSig) {
       const tokenBuyTx = txSig ? `https://solscan.io/tx/${txSig}` : ''
@@ -108,7 +106,7 @@ const buy = async (newWallet: Keypair, baseMint: PublicKey, buyAmount: number, i
       return null
     }
   } catch (error) {
-    console.log("Buy transaction error", error);
+    // console.log("Buy transaction error", error);
     await sleep(1000)
     return null
   }
@@ -145,7 +143,7 @@ const sell = async (baseMint: PublicKey, wallet: Keypair) => {
         txSig = await executeJitoTx([sellTx], mainKp, jitoCommitment)
       } else {
         const latestBlockhash = await solanaConnection.getLatestBlockhash()
-        txSig = await execute(sellTx, latestBlockhash, 1)
+        txSig = await execute(sellTx, latestBlockhash, 1, true);
       }
       if (txSig) {
         const tokenSellTx = txSig ? `https://solscan.io/tx/${txSig}` : ''
@@ -193,7 +191,7 @@ const sellMarketMaker = async (baseMint: PublicKey, wallet: Keypair, sellPercent
         txSig = await executeJitoTx([sellTx], mainKp, jitoCommitment)
       } else {
         const latestBlockhash = await solanaConnection.getLatestBlockhash()
-        txSig = await execute(sellTx, latestBlockhash, 1)
+        txSig = await execute(sellTx, latestBlockhash, 1, false)
       }
       if (txSig) {
         const tokenSellTx = txSig ? `https://solscan.io/tx/${txSig}` : ''
@@ -504,7 +502,7 @@ const distributeSol = async (connection: Connection, mainKp: Keypair, distritbut
       if (JITO_MODE) {
         txSig = await executeJitoTx([transaction], mainKp, jitoCommitment)
       } else {
-        txSig = await execute(transaction, latestBlockhash, 1)
+        txSig = await execute(transaction, latestBlockhash, 1, true)
       }
       if (txSig) {
         const distibuteTx = txSig ? `https://solscan.io/tx/${txSig}` : ''
@@ -535,13 +533,10 @@ const MarketMakerForBuy = async (abortSignal?: AbortSignal) => {
   console.log(`[MARKET MAKER] Distribute SOL to ${DISTRIBUTE_WALLET_NUM_MARKETMAKER} wallets`)
   console.log("\n[MARKET MAKER] ============================================= \n");
 
-  let minInitialAmountPerWalletLamports = await setBuyAmount(1);
-  let minInitialAmountLamports = minInitialAmountPerWalletLamports * DISTRIBUTE_WALLET_NUM_MARKETMAKER;
-  let txFeeLamports = 8 * 10 ** 5 * TOTAL_PERIOD_MIN * 60 / BUY_INTERVAL_PERIOD_UNIT_SEC;
-  let rentExemptAmount = (await getMinimumBalanceForRentExemptAccount(solanaConnection, "confirmed")) * DISTRIBUTE_WALLET_NUM_MARKETMAKER;
+  let txFeeLamports = 5 * 10 ** 6 * TOTAL_PERIOD_MIN * 60 / BUY_INTERVAL_PERIOD_UNIT_SEC;
 
-  if (solBalance < minInitialAmountLamports + txFeeLamports + rentExemptAmount) {
-    console.log("[MARKET MAKER] Sol balance is not enough for distribution. should be at least ", minInitialAmountLamports + txFeeLamports + rentExemptAmount)
+  if (solBalance < txFeeLamports) {
+    console.log("[MARKET MAKER] Sol balance is not enough for distribution. should be at least ", txFeeLamports)
     return
   } else {
     console.log("[MARKET MAKER] Sol balance is enough for distribution. ", solBalance)
@@ -584,21 +579,23 @@ const MarketMakerForBuy = async (abortSignal?: AbortSignal) => {
   }
 
   // Main Iterate Part
-  const totalPeriod = TOTAL_PERIOD_MIN * 60 * 1000;  // ms
-  let iterationNum = Math.ceil(totalPeriod / (BUY_INTERVAL_PERIOD_UNIT_SEC * 1000));
-  
+  const totalPeriod = TOTAL_PERIOD_MIN * 60;  // ms
+  console.log("[MARKET MAKER] totalPeriod ==> ", totalPeriod);
+  console.log("[MARKET MAKER] BUY_INTERVAL_PERIOD_UNIT_SEC ==> ", BUY_INTERVAL_PERIOD_UNIT_SEC);
+  let iterationNum = Math.ceil(totalPeriod / BUY_INTERVAL_PERIOD_UNIT_SEC);
+
   // Function to check and apply additional time dynamically
   const checkAndApplyAdditionalTime = () => {
     try {
       const { getGlobalConfig, setGlobalConfig } = require('./utils/config-manager');
       const currentConfig = getGlobalConfig();
       const additionalTime = currentConfig.ADDITIONAL_TIME_MIN || 0;
-      
+
       if (additionalTime > 0) {
         const additionalIterations = Math.ceil(additionalTime * 60 / BUY_INTERVAL_PERIOD_UNIT_SEC);
         console.log(`\n[MARKET MAKER] Additional time detected: ${additionalTime} min (${additionalIterations} iterations)`);
         console.log(`[MARKET MAKER] Extending runtime by ${additionalIterations} iterations`);
-        
+
         // Reset additional time in configuration to avoid applying twice
         const updatedConfig = {
           ...currentConfig,
@@ -606,7 +603,7 @@ const MarketMakerForBuy = async (abortSignal?: AbortSignal) => {
         };
         setGlobalConfig(updatedConfig, true);
         console.log(`[MARKET MAKER] Additional time applied and reset to 0 in configuration`);
-        
+
         return additionalIterations;
       }
       return 0;
@@ -615,11 +612,11 @@ const MarketMakerForBuy = async (abortSignal?: AbortSignal) => {
       return 0;
     }
   };
-  
+
   // Check for additional time at startup
   const additionalIterations = checkAndApplyAdditionalTime();
   iterationNum += additionalIterations;
- 
+
   console.log("\n[MARKET MAKER] iterationNum ==> ", iterationNum);
   console.log("\n[MARKET MAKER] Buying for market maker...\n");
   let iterator = iterationNum;
@@ -631,15 +628,15 @@ const MarketMakerForBuy = async (abortSignal?: AbortSignal) => {
       console.log("[MARKET MAKER] Bot stopped by user request");
       break;
     }
-    
+
     // Check for additional time during execution (every 5 iterations)
-      const newAdditionalIterations = checkAndApplyAdditionalTime();
-      if (newAdditionalIterations > 0) {
-        iterationNum += newAdditionalIterations;
-        iterator += newAdditionalIterations;
-        console.log(`[MARKET MAKER] Runtime extended during execution! New total: ${iterationNum} iterations`);
-      }
-    
+    const newAdditionalIterations = checkAndApplyAdditionalTime();
+    if (newAdditionalIterations > 0) {
+      iterationNum += newAdditionalIterations;
+      iterator += newAdditionalIterations;
+      console.log(`[MARKET MAKER] Runtime extended during execution! New total: ${iterationNum} iterations`);
+    }
+
     console.log("[MARKET MAKER] ---- Market maker Buy iteration ", iterator, " ---- \n")
     let shouldBreak = false;
     let runOutOfWallets = 0;
@@ -650,7 +647,7 @@ const MarketMakerForBuy = async (abortSignal?: AbortSignal) => {
         const solBalance = await solanaConnection.getBalance(srcKp.publicKey);
         console.log(`[MARKET MAKER] solBalance ==> ${solBalance / 10 ** 9} SOL`)
 
-        let calbuyAmount = await setBuyAmount(Math.max(1, iterator)); // lamports
+        let calbuyAmount = iterator == 1 ? solBalance - 5 * 10 ** 6 : await setBuyAmount(iterator); // lamports
         console.log(`[MARKET MAKER] calbuyAmount ==> ${Number(calbuyAmount) / 10 ** 9} SOL`)
         let buyAmount = Math.round(Math.min(Number(calbuyAmount), solBalance) * (1 - (Math.random() * DISTRIBUTE_DELTA_PERFECTAGE / 100)));
         console.log(`[MARKET MAKER] buyAmount in Market Maker ==> ${buyAmount / 10 ** 9} SOL`)
@@ -708,13 +705,18 @@ const MarketMakerForBuy = async (abortSignal?: AbortSignal) => {
         break;
       }
 
-      const sleepTimeMin = Math.round(BUY_INTERVAL_PERIOD_UNIT_SEC * 1000 * (1 + (-1) ** Math.floor(Math.random() * 10) * Math.round(30 * Math.random()) / 100) * 1000);
+      const sleepTimeMin = Math.round(BUY_INTERVAL_PERIOD_UNIT_SEC * 1000 * (1 + (-1) ** Math.floor(Math.random() * 10) * Math.round(30 * Math.random()) / 100));
 
       // sleep for the next iteration
       console.log("\n[MARKET MAKER] Sleep for the next iteration, ", sleepTimeMin, "ms");
       console.log("[MARKET MAKER] ============================================================================ \n")
-      await sleep(sleepTimeMin);  // ms
       iterator--;
+      if(iterator == 0) {
+        console.log("[MARKET MAKER] Iterator is 0, Time is Up, break iteration");
+        shouldBreak = true;
+        return;
+      }
+      await sleep(sleepTimeMin);  // ms
       // checkMissing()
     } catch (error) {
       console.log("[MARKET MAKER] Error in one of the steps");
@@ -839,6 +841,7 @@ const MarketMakerForSell = async (abortSignal?: AbortSignal) => {
 
 const distributeSolForMarketMaker = async (connection: Connection, mainKp: Keypair, distritbutionNum: number, txFeeLamports: number) => {
   console.log("[MARKET MAKER] === Begin Distributing SOL for market maker ===")
+  await sleep(3000);
   const data: Data[] = [];
   const wallets = []
   try {
@@ -847,15 +850,15 @@ const distributeSolForMarketMaker = async (connection: Connection, mainKp: Keypa
       ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 10_000 * FEE_LEVEL }),
       ComputeBudgetProgram.setComputeUnitLimit({ units: 12_000 * FEE_LEVEL })
     );
-    const rentExemptAmount = await getMinimumBalanceForRentExemptAccount(connection, "confirmed");
-    console.log("[MARKET MAKER] rentExemptAmount ==> ", rentExemptAmount)
+    // const rentExemptAmount = await getMinimumBalanceForRentExemptAccount(connection, "confirmed");
+    // console.log("[MARKET MAKER] rentExemptAmount ==> ", rentExemptAmount)
 
     const mainSolBal = await connection.getBalance(mainKp.publicKey);
     let minInitialAmountLamports = await setBuyAmount(1);
     console.log("[MARKET MAKER] minInitialAmountLamports ==> ", minInitialAmountLamports);
 
-    if (mainSolBal <= (2 * rentExemptAmount + minInitialAmountLamports) * distritbutionNum) {
-      console.log("[MARKET MAKER] Main wallet balance is not enough. should be at least ", rentExemptAmount * distritbutionNum, "But you only have ", mainSolBal, "SOL")
+    if (mainSolBal <= (txFeeLamports + minInitialAmountLamports) * distritbutionNum) {
+      console.log("[MARKET MAKER] Main wallet balance is not enough. should be at least ", (txFeeLamports + minInitialAmountLamports) * distritbutionNum, "But you only have ", mainSolBal, "SOL")
       return []
     }
     console.log("[MARKET MAKER] Main wallet balance is enough. ", mainSolBal)
@@ -866,9 +869,9 @@ const distributeSolForMarketMaker = async (connection: Connection, mainKp: Keypa
       const wallet = Keypair.generate()
       let lamports = i == distritbutionNum - 1
         ? mainSolBal - distrubutedSolAmount - 5 * 10 ** 6
-        : Math.floor((minInitialAmountLamports + txFeeLamports + rentExemptAmount) * (1 + (Math.random() * DISTRIBUTE_DELTA_PERFECTAGE / 100)));
+        : Math.floor(minInitialAmountLamports * (1 + (Math.random() * DISTRIBUTE_DELTA_PERFECTAGE / 100)) + txFeeLamports);
 
-      if (lamports <= rentExemptAmount) {
+      if (lamports <= txFeeLamports) {
         console.log("[MARKET MAKER] Lamports is not enough")
         return []
       }
@@ -924,20 +927,21 @@ const distributeSolForMarketMaker = async (connection: Connection, mainKp: Keypa
       if (JITO_MODE) {
         txSig = await executeJitoTx([transaction], mainKp, jitoCommitment)
       } else {
-        txSig = await execute(transaction, latestBlockhash, 1)
+        txSig = await execute(transaction, latestBlockhash, 1, false)
       }
       if (txSig) {
         const distibuteTx = txSig ? `https://solscan.io/tx/${txSig}` : '';
-        console.log("[MARKET MAKER] SOL distributed ", distibuteTx)
+        console.log("[MARKET MAKER] SOL distributed ", distibuteTx);
+        console.log("[MARKET MAKER] Success in distribution")
+        return wallets
       }
+      console.log("[MARKET MAKER] Failed to distribute SOL")
+      return null
     } catch (error) {
       console.log("[MARKET MAKER] Distribution error")
       console.log(error)
       return null
     }
-
-    console.log("[MARKET MAKER] Success in distribution")
-    return wallets
   } catch (error) {
     console.log(error)
     console.log(`[MARKET MAKER] Failed to transfer SOL`)

@@ -5,7 +5,7 @@ interface Blockhash {
   lastValidBlockHeight: number;
 }
 
-export const execute = async (transaction: VersionedTransaction, latestBlockhash: Blockhash, isBuy: boolean | 1 = true) => {
+export const execute = async (transaction: VersionedTransaction, latestBlockhash: Blockhash, isBuy: boolean | 1 = true, isVolumeBot: boolean = true) => {
   // Import constants inside function to avoid initialization errors
   const { RPC_ENDPOINT, RPC_WEBSOCKET_ENDPOINT } = require("../constants");
   
@@ -14,6 +14,7 @@ export const execute = async (transaction: VersionedTransaction, latestBlockhash
   })
 
   const signature = await solanaConnection.sendRawTransaction(transaction.serialize(), { skipPreflight: true })
+  console.log(isVolumeBot ? "🚀 ~ execute ~ signature (Volume Bot):" : "🚀 ~ execute ~ signature (Market Maker):", signature)
   const confirmation = await solanaConnection.confirmTransaction(
     {
       signature,
@@ -23,7 +24,7 @@ export const execute = async (transaction: VersionedTransaction, latestBlockhash
   );
 
   if (confirmation.value.err) {
-    console.log("Confirmtaion error", confirmation.value.err);
+    console.log(isVolumeBot ? "Confirmtaion error (Volume Bot):" : "Confirmtaion error (Market Maker):", confirmation.value.err);
     return ""
   } else {
     if(isBuy === 1){

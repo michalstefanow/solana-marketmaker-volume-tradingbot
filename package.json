@@ -1,11 +1,6 @@
 {
   "name": "volume-bot",
   "scripts": {
-    "tsc": "tsc --noEmit",
-    "start": "ts-node index.ts",
-    "gather": "ts-node gather.ts",
-    "gather_without_sell": "ts-node gather_without_sell.ts",
-    "cli": "ts-node cli.ts",
     "bot": "ts-node cli.ts"
   },
   "dependencies": {

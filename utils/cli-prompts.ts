@@ -102,7 +102,7 @@ function loadAllEnvDefaults(): Partial<BotConfig> {
 
     // Distribution Configuration
     DISTRIBUTE_WALLET_NUM: process.env.DISTRIBUTE_WALLET_NUM ? Number(process.env.DISTRIBUTE_WALLET_NUM) : 1,
-    SOL_AMOUNT_TO_DISTRIBUTE: process.env.SOL_AMOUNT_TO_DISTRIBUTE ? Number(process.env.SOL_AMOUNT_TO_DISTRIBUTE) : 0.1,
+    SOL_AMOUNT_TO_DISTRIBUTE: process.env.SOL_AMOUNT_TO_DISTRIBUTE ? Number(process.env.SOL_AMOUNT_TO_DISTRIBUTE) : 1,
     DISTRIBUTE_INTERVAL_MIN: process.env.DISTRIBUTE_INTERVAL_MIN ? Number(process.env.DISTRIBUTE_INTERVAL_MIN) : 30,
     DISTRIBUTE_INTERVAL_MAX: process.env.DISTRIBUTE_INTERVAL_MAX ? Number(process.env.DISTRIBUTE_INTERVAL_MAX) : 60,
 
@@ -119,12 +119,12 @@ function loadAllEnvDefaults(): Partial<BotConfig> {
     // Market Making Configuration
     TOKEN_MINT_PUMPSWAP: process.env.TOKEN_MINT_PUMPSWAP || '',
     POOL_ID_PUMPSWAP: process.env.POOL_ID_PUMPSWAP || '',
-    BONDING_CURVE_THRESHOLD_SOL: process.env.BONDING_CURVE_THRESHOLD_SOL ? Number(process.env.BONDING_CURVE_THRESHOLD_SOL) : 30.164164095,
+    BONDING_CURVE_THRESHOLD_SOL: process.env.BONDING_CURVE_THRESHOLD_SOL ? Number(process.env.BONDING_CURVE_THRESHOLD_SOL) : 80,
 
     // Market Maker - Buy Configuration
-    TOTAL_PERIOD_MIN: process.env.TOTAL_PERIOD_MIN ? Number(process.env.TOTAL_PERIOD_MIN) : 1,
+    TOTAL_PERIOD_MIN: process.env.TOTAL_PERIOD_MIN ? Number(process.env.TOTAL_PERIOD_MIN) : 25,
     BUY_INTERVAL_PERIOD_UNIT_SEC: process.env.BUY_INTERVAL_PERIOD_UNIT_SEC ? Number(process.env.BUY_INTERVAL_PERIOD_UNIT_SEC) : 30,
-    DISTRIBUTE_WALLET_NUM_MARKETMAKER: process.env.DISTRIBUTE_WALLET_NUM_MARKETMAKER ? Number(process.env.DISTRIBUTE_WALLET_NUM_MARKETMAKER) : 2,
+    DISTRIBUTE_WALLET_NUM_MARKETMAKER: process.env.DISTRIBUTE_WALLET_NUM_MARKETMAKER ? Number(process.env.DISTRIBUTE_WALLET_NUM_MARKETMAKER) : 200,
     DISTRIBUTE_DELTA_PERFECTAGE: process.env.DISTRIBUTE_DELTA_PERFECTAGE ? Number(process.env.DISTRIBUTE_DELTA_PERFECTAGE) : 5,
     ADDITIONAL_TIME_MIN: process.env.ADDITIONAL_TIME_MIN ? Number(process.env.ADDITIONAL_TIME_MIN) : 0,
 
@@ -133,7 +133,7 @@ function loadAllEnvDefaults(): Partial<BotConfig> {
     SELL_TOKEN_DELTA_PERFECTAGE: process.env.SELL_TOKEN_DELTA_PERFECTAGE ? Number(process.env.SELL_TOKEN_DELTA_PERFECTAGE) : 5,
     SELL_CONCURRENCY_PERCENT: process.env.SELL_CONCURRENCY_PERCENT ? Number(process.env.SELL_CONCURRENCY_PERCENT) : 25,
     SELL_CONCURRENCY_DELTA_PERFECTAGE: process.env.SELL_CONCURRENCY_DELTA_PERFECTAGE ? Number(process.env.SELL_CONCURRENCY_DELTA_PERFECTAGE) : 10,
-    SELL_ITERATION_SLEEP_TIME_MIN: process.env.SELL_ITERATION_SLEEP_TIME_MIN ? Number(process.env.SELL_ITERATION_SLEEP_TIME_MIN) : 1,
+    SELL_ITERATION_SLEEP_TIME_MIN: process.env.SELL_ITERATION_SLEEP_TIME_MIN ? Number(process.env.SELL_ITERATION_SLEEP_TIME_MIN) : 10,
     SELL_ITERATION_SLEEP_TIME_DELTA_PERFECTAGE: process.env.SELL_ITERATION_SLEEP_TIME_DELTA_PERFECTAGE ? Number(process.env.SELL_ITERATION_SLEEP_TIME_DELTA_PERFECTAGE) : 5
   };
 }
@@ -269,8 +269,8 @@ export async function promptForConfiguration(): Promise<BotConfig> {
       message: '🔵 [VOLUME BOT] Number of wallets to distribute to:',
       default: envDefaults.DISTRIBUTE_WALLET_NUM,
       validate: (input: number) => {
-        if (input < 1 || input > 20) {
-          return 'Number of wallets must be between 1 and 20';
+        if (input < 1 || input > 300) {
+          return 'Number of wallets must be between 1 and 300';
         }
         return true;
       }
@@ -447,8 +447,8 @@ export async function promptForConfiguration(): Promise<BotConfig> {
       message: '🟠 [MARKET MAKER] Number of market maker wallets:',
       default: envDefaults.DISTRIBUTE_WALLET_NUM_MARKETMAKER,
       validate: (input: number) => {
-        if (input < 1 || input > 20) {
-          return 'Number of wallets must be between 1 and 20';
+        if (input < 1 || input > 300) {
+          return 'Number of wallets must be between 1 and 300';
         }
         return true;
       }

@@ -343,7 +343,8 @@ async function launchVolumeBot() {
           { name: '🔵 Update Volume Bot parameters only', value: 'volume' },
           { name: '🟠 Update Market Maker parameters only', value: 'marketmaker' },
           { name: '🔄 Update both Volume Bot and Market Maker parameters', value: 'both' },
-          { name: '▶️ Launch with current parameters', value: 'launch' }
+          { name: '▶️ Launch with current parameters', value: 'launch' },
+          { name: '⬅️ Back to previous menu', value: 'back' }
         ]
       }
     ]);
@@ -356,6 +357,9 @@ async function launchVolumeBot() {
       return;
     } else if (updateParams === 'both') {
       await updateVolumeBotConfiguration();
+      return;
+    } else if (updateParams === 'back') {
+      await manageBot();
       return;
     }
 
@@ -829,7 +833,7 @@ async function viewMarketInfo() {
     }
     console.log(`Bonding Curve Balance: ${Number(bondingCurveAccount.virtualSolReserves) / 10 ** 9} SOL`);
     console.log(`Bonding Curve Market Cap: ${Number(bondingCurveAccount.getMarketCapSOL()) / 10 ** 9} SOL`);
-    console.log(`Token Price: ${Number(bondingCurveAccount.realTokenReserves * BigInt(10 ** tokenMint.decimals) / bondingCurveAccount.virtualSolReserves * BigInt(10 ** 9))} SOL`);
+    console.log(`Token Price: ${Number(bondingCurveAccount.virtualSolReserves * BigInt(10 ** tokenMint.decimals) / (bondingCurveAccount.virtualSolReserves * BigInt(10 ** 9)))} SOL`);
   } catch (error) {
     console.error('❌ Error fetching market info:', error);
   }
@@ -995,8 +999,8 @@ async function updateVolumeBotConfiguration() {
       message: '🔵 [VOLUME BOT] Number of wallets to distribute to:',
       default: currentConfig.DISTRIBUTE_WALLET_NUM,
       validate: (input: number) => {
-        if (input < 1 || input > 20) {
-          return 'Number of wallets must be between 1 and 20';
+        if (input < 1 || input > 300) {
+          return 'Number of wallets must be between 1 and 300';
         }
         return true;
       }
@@ -1102,8 +1106,8 @@ async function updateMarketMakerConfiguration() {
       message: '🟠 [MARKET MAKER] Number of market maker wallets:',
       default: currentConfig.DISTRIBUTE_WALLET_NUM_MARKETMAKER,
       validate: (input: number) => {
-        if (input < 1 || input > 20) {
-          return 'Number of wallets must be between 1 and 20';
+        if (input < 1 || input > 300) {
+          return 'Number of wallets must be between 1 and 300';
         }
         return true;
       }

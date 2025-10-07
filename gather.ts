@@ -3,24 +3,27 @@ import { TOKEN_PROGRAM_ID, createAssociatedTokenAccountIdempotentInstruction, cr
 import { SPL_ACCOUNT_LAYOUT, TokenAccount } from "@raydium-io/raydium-sdk";
 import base58 from "bs58"
 
-import { readJson, saveNewFile, sleep } from "./utils"
+import { getGlobalConfig, readJson, saveNewFile, sleep } from "./utils"
 
 import { execute } from "./executor/legacy";
 import { makeSellPumpfunTokenTx } from "./utils/pumpfun";
 
 const main = async (filename: string = "") => {
   // Import constants inside function to avoid initialization errors
-  const { GATHER_ADDRESS, GATHER_TO_OTHER_ADDRESS, POOL_ID, PRIVATE_KEY, RPC_ENDPOINT, RPC_WEBSOCKET_ENDPOINT } = require("./constants");
-  
+  const { GATHER_ADDRESS, GATHER_TO_OTHER_ADDRESS, POOL_ID, PRIVATE_KEY, RPC_ENDPOINT, RPC_WEBSOCKET_ENDPOINT } = getGlobalConfig();
+
   const connection = new Connection(RPC_ENDPOINT, { wsEndpoint: RPC_WEBSOCKET_ENDPOINT, commitment: "confirmed" });
   const mainKp = Keypair.fromSecretKey(base58.decode(PRIVATE_KEY));
-  
+
   const walletsData = readJson(filename)
 
   const wallets = walletsData.map(({ privateKey }) => Keypair.fromSecretKey(base58.decode(privateKey)))
-  // wallets.map(async (kp, i) => {
-  let i = 0;
-  for(const kp of wallets) {
+
+  await Promise.all(wallets.map(async (kp, i) => {
+    await sleep(200 * i)
+
+    // let i = 0;
+    // for(const kp of wallets) {
     i++;
     try {
       const solBalance = await connection.getBalance(kp.publicKey)
@@ -66,11 +69,12 @@ const main = async (filename: string = "") => {
             // const sellTx = await getSellTx(connection, kp, accounts[j].accountInfo.mint, NATIVE_MINT, POOL_ID, undefined)
             const sellTx = await makeSellPumpfunTokenTx(kp, accounts[j].accountInfo.mint)
             if (sellTx == null) {
-              // console.log(`Error getting sell transaction`)
+              console.log(`Error getting sell transaction`)
               throw new Error("Error getting sell tx")
             }
 
             const simResult = await connection.simulateTransaction(sellTx)
+            console.log("🚀 ~ main ~ simResult:", simResult)
 
             if (simResult.value.err) {
               console.log("Transaction simulation failed")
@@ -144,7 +148,7 @@ const main = async (filename: string = "") => {
           await sleep(3000)
           const walletsData = readJson(filename)
           const wallets = walletsData.filter(({ privateKey }) => base58.encode(kp.secretKey) != privateKey)
-          saveNewFile(wallets)
+          // saveNewFile(wallets)
           console.log("Wallet ", kp.publicKey.toBase58(), " is completed")
         }
       }
@@ -152,7 +156,7 @@ const main = async (filename: string = "") => {
       console.log("transaction error while gathering", error)
       return
     }
-  }
+  }))
 
   console.log("All wallets are completed in ", filename, " file");
   console.log("============================================================================ \n")
