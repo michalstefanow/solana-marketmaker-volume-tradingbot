@@ -8,14 +8,25 @@ export interface SavedConfig {
   config: BotConfig;
   timestamp: number;
   version: string;
+  lastDistributionTimestamp?: number; // Timestamp of last SOL distribution
 }
 
-export function saveConfiguration(config: BotConfig): void {
+export function saveConfiguration(config: BotConfig, preserveDistributionTimestamp: boolean = false): void {
   try {
+    // Load existing config to preserve distribution timestamp if needed
+    let existingDistributionTimestamp: number | undefined = undefined;
+    if (preserveDistributionTimestamp) {
+      const existingConfig = loadConfiguration();
+      if (existingConfig) {
+        existingDistributionTimestamp = existingConfig.lastDistributionTimestamp;
+      }
+    }
+
     const savedConfig: SavedConfig = {
       config,
       timestamp: Date.now(),
-      version: '1.0.0'
+      version: '1.0.0',
+      lastDistributionTimestamp: existingDistributionTimestamp
     };
 
     fs.writeFileSync(CONFIG_FILE_PATH, JSON.stringify(savedConfig, null, 2));
@@ -88,4 +99,77 @@ export function displaySavedConfigInfo(savedConfig: SavedConfig): void {
   console.log(`Wallets: ${savedConfig.config.DISTRIBUTE_WALLET_NUM}`);
   console.log(`SOL Amount: ${savedConfig.config.SOL_AMOUNT_TO_DISTRIBUTE}`);
   console.log('================================\n');
+}
+
+export function updateDistributionTimestamp(): void {
+  try {
+    const existingConfig = loadConfiguration();
+    if (!existingConfig) {
+      console.error('❌ No configuration found to update');
+      return;
+    }
+
+    const updatedConfig: SavedConfig = {
+      ...existingConfig,
+      lastDistributionTimestamp: Date.now()
+    };
+
+    fs.writeFileSync(CONFIG_FILE_PATH, JSON.stringify(updatedConfig, null, 2));
+  } catch (error) {
+    console.error('❌ Error updating distribution timestamp:', error);
+  }
+}
+
+export function hasDistributionTimePassed(): boolean {
+  try {
+    const savedConfig = loadConfiguration();
+    if (!savedConfig || !savedConfig.lastDistributionTimestamp) {
+      // No distribution yet, so time has NOT passed (blocks bot operations)
+      return false;
+    }
+
+    const now = Date.now();
+    const elapsed = now - savedConfig.lastDistributionTimestamp;
+    const twentyFourHours = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
+    return elapsed >= twentyFourHours;
+  } catch (error) {
+    console.error('❌ Error checking distribution time:', error);
+    return false; // Default to false on error to block operations for safety
+  }
+}
+
+export function hasDistributionOccurred(): boolean {
+  try {
+    const savedConfig = loadConfiguration();
+    return savedConfig ? savedConfig.lastDistributionTimestamp !== undefined : false;
+  } catch (error) {
+    console.error('❌ Error checking if distribution occurred:', error);
+    return false;
+  }
+}
+
+export function getTimeUntilNextDistribution(): string {
+  try {
+    const savedConfig = loadConfiguration();
+    if (!savedConfig || !savedConfig.lastDistributionTimestamp) {
+      return 'Distribution required first';
+    }
+
+    const now = Date.now();
+    const elapsed = now - savedConfig.lastDistributionTimestamp;
+    const twentyFourHours = 24 * 60 * 60 * 1000;
+    const remaining = twentyFourHours - elapsed;
+
+    if (remaining <= 0) {
+      return 'Available now';
+    }
+
+    const hours = Math.floor(remaining / (60 * 60 * 1000));
+    const minutes = Math.floor((remaining % (60 * 60 * 1000)) / (60 * 1000));
+
+    return `${hours}h ${minutes}m remaining`;
+  } catch (error) {
+    return 'Unknown';
+  }
 }

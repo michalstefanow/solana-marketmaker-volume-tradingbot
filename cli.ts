@@ -1,9 +1,8 @@
 import { promptForConfiguration, displayConfiguration } from './utils/cli-prompts';
 import { setGlobalConfig, getGlobalConfig, loadConfigFromFile, hasConfiguration } from './utils/config-manager';
-import { displaySavedConfigInfo } from './utils/config-persistence';
+import { displaySavedConfigInfo, updateDistributionTimestamp, hasDistributionTimePassed, hasDistributionOccurred, getTimeUntilNextDistribution } from './utils/config-persistence';
 import inquirer from 'inquirer';
-import { Connection, PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
-import base58 from 'bs58';
+import { PublicKey } from '@solana/web3.js';
 import { bondingCurveStatics, getBondingCurvePDA, getTokenMint } from './utils/pumpfun';
 import { getPumpswapPoolId } from './utils/pumpswap';
 
@@ -274,14 +273,26 @@ async function manageBot() {
   console.log('\n🤖 Bot Management');
   console.log('=================\n');
 
+  // Check distribution status
+  const hasDistribution = hasDistributionOccurred();
+  const canUseOtherOptions = hasDistributionTimePassed();
+  
+  let statusMessage = '';
+  if (!hasDistribution) {
+    statusMessage = ' (Distribution required first)';
+  } else if (!canUseOtherOptions) {
+    statusMessage = ` (${getTimeUntilNextDistribution()})`;
+  }
+
   const { action } = await inquirer.prompt([
     {
       type: 'list',
       name: 'action',
       message: 'What would you like to do?',
       choices: [
-        { name: '🚀 Launch Bot (Start buying and selling)', value: 'launch' },
-        { name: '💰 Launch Sell Bot (Start selling only)', value: 'sell' },
+        { name: '🚀 Distribute SOL', value: 'distribute' },
+        { name: '🚀 Launch Bot (Start buying and selling)', value: 'launch', disabled: !canUseOtherOptions ? `Distribution required + 24hrs wait${statusMessage}` : false },
+        { name: '💰 Launch Sell Bot (Start selling only)', value: 'sell', disabled: !canUseOtherOptions ? `Distribution required + 24hrs wait${statusMessage}` : false },
         { name: '⏹️  Stop Bot', value: 'stop', disabled: !isBotRunning ? 'No bot running' : false },
         { name: '⏰ Extend Bot Runtime', value: 'extend', disabled: !isBotRunning ? 'No bot running' : false },
         { name: '📊 Bot Status', value: 'status' },
@@ -292,6 +303,9 @@ async function manageBot() {
   ]);
 
   switch (action) {
+    case 'distribute':
+      await distributeSolToWallets();
+      break;
     case 'launch':
       await launchVolumeBot();
       break;
@@ -315,8 +329,126 @@ async function manageBot() {
   }
 }
 
+async function distributeSolToWallets() {
+  console.log('\n🚀 Distribute SOL to Volume Bot & Market Maker Wallets');
+  console.log('======================================================\n');
+
+  try {
+    // Validate configuration before distributing
+    const savedConfig = loadConfigFromFile();
+    if (!savedConfig) {
+      console.log('\n❌ Configuration file not found!');
+      console.log('Please initialize configuration first.\n');
+      return;
+    }
+
+    // Ensure global config is loaded
+    try {
+      getGlobalConfig();
+    } catch (error) {
+      console.log('\n🔄 Loading configuration...');
+      setGlobalConfig(savedConfig.config, false);
+    }
+
+    const config = getGlobalConfig();
+
+    // Show distribution summary
+    console.log('📊 Distribution Summary:');
+    console.log('========================');
+    console.log(`Volume Bot Wallets: ${config.DISTRIBUTE_WALLET_NUM}`);
+    console.log(`Market Maker Wallets: ${config.DISTRIBUTE_WALLET_NUM_MARKETMAKER}`);
+    console.log(`SOL to Distribute (Volume Bot): ${config.SOL_AMOUNT_TO_DISTRIBUTE} SOL`);
+    console.log(`Total Wallets: ${config.DISTRIBUTE_WALLET_NUM + config.DISTRIBUTE_WALLET_NUM_MARKETMAKER}\n`);
+
+    const { confirmDistribution } = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'confirmDistribution',
+        message: 'Proceed with SOL distribution?',
+        default: true
+      }
+    ]);
+
+    if (!confirmDistribution) {
+      console.log('❌ Distribution cancelled.\n');
+      return;
+    }
+
+    console.log('\n🚀 Starting SOL distribution...\n');
+
+    // Import the distribution functions from index.ts
+    const indexModule = await import('./index');
+    
+    // Get the necessary objects from index
+    const { solanaConnection, mainKp } = indexModule;
+
+    // Distribute for Volume Bot
+    console.log('📤 Distributing SOL for Volume Bot...');
+    const { distributeSol } = await import('./index');
+    const volumeBotData = await distributeSol(solanaConnection, mainKp, config.DISTRIBUTE_WALLET_NUM);
+    
+    if (!volumeBotData || volumeBotData.length === 0) {
+      console.log('❌ Volume Bot distribution failed.\n');
+      return;
+    }
+    
+    console.log('✅ Volume Bot distribution successful!\n');
+
+    // Wait a bit before next distribution
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Distribute for Market Maker
+    console.log('📤 Distributing SOL for Market Maker...');
+    const { distributeSolForMarketMaker } = await import('./index');
+    
+    // Calculate transaction fee for market maker
+    let txFeeLamports = 5 * 10 ** 6 * config.TOTAL_PERIOD_MIN * 60 / config.BUY_INTERVAL_PERIOD_UNIT_SEC;
+    
+    const marketMakerData = await distributeSolForMarketMaker(
+      solanaConnection,
+      mainKp,
+      config.DISTRIBUTE_WALLET_NUM_MARKETMAKER,
+      txFeeLamports
+    );
+    
+    if (!marketMakerData || marketMakerData.length === 0) {
+      console.log('❌ Market Maker distribution failed.\n');
+      return;
+    }
+    
+    console.log('✅ Market Maker distribution successful!\n');
+
+    // Update the distribution timestamp
+    updateDistributionTimestamp();
+    
+    console.log('✅ SOL Distribution Complete!');
+    console.log('==============================');
+    console.log(`Volume Bot wallets: ${volumeBotData.length}`);
+    console.log(`Market Maker wallets: ${marketMakerData.length}`);
+    console.log('\n⏰ Other bot options will be available in 24 hours.\n');
+
+  } catch (error) {
+    console.error('❌ Error during SOL distribution:', error);
+  }
+}
+
 async function launchVolumeBot() {
   try {
+    // Check if distribution has occurred and 24 hours have passed
+    const hasDistribution = hasDistributionOccurred();
+    const canUseOtherOptions = hasDistributionTimePassed();
+    
+    if (!hasDistribution) {
+      console.log(`\n❌ Bot launch is not available yet. Distribute SOL first, then wait 24 hours.\n`);
+      return;
+    }
+    
+    if (!canUseOtherOptions) {
+      const timeRemaining = getTimeUntilNextDistribution();
+      console.log(`\n❌ Bot launch is not available yet. ${timeRemaining} until other options are available.\n`);
+      return;
+    }
+
     // Validate configuration before launching
     const savedConfig = loadConfigFromFile();
     if (!savedConfig) {
@@ -395,6 +527,21 @@ async function launchVolumeBot() {
 
 async function launchSellBot() {
   try {
+    // Check if distribution has occurred and 24 hours have passed
+    const hasDistribution = hasDistributionOccurred();
+    const canUseOtherOptions = hasDistributionTimePassed();
+    
+    if (!hasDistribution) {
+      console.log(`\n❌ Sell bot launch is not available yet. Distribute SOL first, then wait 24 hours.\n`);
+      return;
+    }
+    
+    if (!canUseOtherOptions) {
+      const timeRemaining = getTimeUntilNextDistribution();
+      console.log(`\n❌ Sell bot launch is not available yet. ${timeRemaining} until other options are available.\n`);
+      return;
+    }
+
     // Validate configuration before launching
     const savedConfig = loadConfigFromFile();
     if (!savedConfig) {
@@ -508,6 +655,20 @@ async function showBotStatus() {
   console.log('\n📊 Bot Status');
   console.log('==============');
   console.log(`Status: ${isBotRunning ? '🟢 Running' : '🔴 Stopped'}`);
+  
+  // Show distribution status
+  const hasDistribution = hasDistributionOccurred();
+  const canUseOtherOptions = hasDistributionTimePassed();
+  const timeRemaining = getTimeUntilNextDistribution();
+  
+  if (!hasDistribution) {
+    console.log('Distribution: ❌ Required first');
+  } else if (canUseOtherOptions) {
+    console.log('Distribution: ✅ Available');
+  } else {
+    console.log(`Distribution: ⏰ ${timeRemaining}`);
+  }
+  
   if (isBotRunning) {
     console.log(`Type: ${currentBotType}`);
 
@@ -529,6 +690,12 @@ async function showBotStatus() {
     }
 
     console.log('💡 Use "Stop Bot" to halt the bot');
+  }
+  
+  if (!hasDistribution) {
+    console.log('💡 Distribute SOL first, then wait 24 hours before other options become available');
+  } else if (!canUseOtherOptions) {
+    console.log('💡 Other bot options will be available after 24 hours from last distribution');
   }
   console.log('');
 }
@@ -831,9 +998,10 @@ async function viewMarketInfo() {
       console.log('❌ Error fetching bonding curve account');
       return;
     }
+    console.log(bondingCurveAccount);
     console.log(`Bonding Curve Balance: ${Number(bondingCurveAccount.virtualSolReserves) / 10 ** 9} SOL`);
     console.log(`Bonding Curve Market Cap: ${Number(bondingCurveAccount.getMarketCapSOL()) / 10 ** 9} SOL`);
-    console.log(`Token Price: ${Number(bondingCurveAccount.virtualSolReserves * BigInt(10 ** tokenMint.decimals) / (bondingCurveAccount.virtualSolReserves * BigInt(10 ** 9)))} SOL`);
+    console.log(`Token Price: ${(Number(bondingCurveAccount.virtualSolReserves) / (Number(bondingCurveAccount.virtualTokenReserves) * (10 ** (9 - tokenMint.decimals))))} SOL`);
   } catch (error) {
     console.error('❌ Error fetching market info:', error);
   }
@@ -842,6 +1010,21 @@ async function viewMarketInfo() {
 async function extendBotRuntime() {
   console.log('\n⏰ Extend Bot Runtime');
   console.log('====================\n');
+
+  // Check if distribution has occurred and 24 hours have passed
+  const hasDistribution = hasDistributionOccurred();
+  const canUseOtherOptions = hasDistributionTimePassed();
+  
+  if (!hasDistribution) {
+    console.log(`❌ Bot extension is not available yet. Distribute SOL first, then wait 24 hours.\n`);
+    return;
+  }
+  
+  if (!canUseOtherOptions) {
+    const timeRemaining = getTimeUntilNextDistribution();
+    console.log(`❌ Bot extension is not available yet. ${timeRemaining} until other options are available.\n`);
+    return;
+  }
 
   if (!isBotRunning) {
     console.log('❌ No bot is currently running. Please start a bot first.\n');

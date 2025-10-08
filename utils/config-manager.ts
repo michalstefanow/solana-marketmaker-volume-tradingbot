@@ -4,10 +4,10 @@ import { saveConfiguration, loadConfiguration, SavedConfig } from './config-pers
 // Global configuration instance
 let globalConfig: BotConfig | null = null;
 
-export function setGlobalConfig(config: BotConfig, saveToFile: boolean = true): void {
+export function setGlobalConfig(config: BotConfig, saveToFile: boolean = true, preserveDistributionTimestamp: boolean = true): void {
   globalConfig = config;
   if (saveToFile) {
-    saveConfiguration(config);
+    saveConfiguration(config, preserveDistributionTimestamp);
   }
 }
 
