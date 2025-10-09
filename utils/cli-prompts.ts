@@ -47,6 +47,7 @@ export interface BotConfig {
   DISTRIBUTE_WALLET_NUM_MARKETMAKER: number;
   DISTRIBUTE_DELTA_PERFECTAGE: number;
   ADDITIONAL_TIME_MIN: number;
+  SOL_AMOUNT_TO_DISTRIBUTE_FOR_MARKETMAKER: number;
 
   // Market Maker - Sell Configuration
   SELL_TOKEN_PERCENT: number;
@@ -127,6 +128,7 @@ function loadAllEnvDefaults(): Partial<BotConfig> {
     DISTRIBUTE_WALLET_NUM_MARKETMAKER: process.env.DISTRIBUTE_WALLET_NUM_MARKETMAKER ? Number(process.env.DISTRIBUTE_WALLET_NUM_MARKETMAKER) : 200,
     DISTRIBUTE_DELTA_PERFECTAGE: process.env.DISTRIBUTE_DELTA_PERFECTAGE ? Number(process.env.DISTRIBUTE_DELTA_PERFECTAGE) : 5,
     ADDITIONAL_TIME_MIN: process.env.ADDITIONAL_TIME_MIN ? Number(process.env.ADDITIONAL_TIME_MIN) : 0,
+    SOL_AMOUNT_TO_DISTRIBUTE_FOR_MARKETMAKER: process.env.SOL_AMOUNT_TO_DISTRIBUTE_FOR_MARKETMAKER ? Number(process.env.SOL_AMOUNT_TO_DISTRIBUTE_FOR_MARKETMAKER) : 0.01,
 
     // Market Maker - Sell Configuration
     SELL_TOKEN_PERCENT: process.env.SELL_TOKEN_PERCENT ? Number(process.env.SELL_TOKEN_PERCENT) : 10,
@@ -477,6 +479,18 @@ export async function promptForConfiguration(): Promise<BotConfig> {
         return true;
       }
     },
+    {
+      type: 'number',
+      name: 'SOL_AMOUNT_TO_DISTRIBUTE_FOR_MARKETMAKER',
+      message: '🟠 [MARKET MAKER] SOL amount to distribute for market maker (total):',
+      default: envDefaults.SOL_AMOUNT_TO_DISTRIBUTE_FOR_MARKETMAKER,
+      validate: (input: number) => {
+        if (input <= 0) {
+          return 'SOL amount must be greater than 0';
+        }
+        return true;
+      }
+    },
 
     // 🟠 MARKET MAKER - Sell Configuration
     {
@@ -596,6 +610,7 @@ export function displayConfiguration(config: BotConfig): void {
   console.log(`Total Period: ${config.TOTAL_PERIOD_MIN} min`);
   console.log(`Buy Interval Unit: ${config.BUY_INTERVAL_PERIOD_UNIT_SEC}s`);
   console.log(`Market Maker Wallets: ${config.DISTRIBUTE_WALLET_NUM_MARKETMAKER}`);
+  console.log(`SOL to Distribute (Market Maker): ${config.SOL_AMOUNT_TO_DISTRIBUTE_FOR_MARKETMAKER} SOL`);
   console.log(`Distribution Delta: ${config.DISTRIBUTE_DELTA_PERFECTAGE}%`);
   console.log(`Additional Time: ${config.ADDITIONAL_TIME_MIN} min`);
   console.log(`Sell Token %: ${config.SELL_TOKEN_PERCENT}%`);

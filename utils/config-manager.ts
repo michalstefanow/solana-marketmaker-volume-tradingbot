@@ -134,6 +134,9 @@ export const config = {
   get ADDITIONAL_TIME_MIN(): number {
     return getConfigValue('ADDITIONAL_TIME_MIN');
   },
+  get SOL_AMOUNT_TO_DISTRIBUTE_FOR_MARKETMAKER(): number {
+    return getConfigValue('SOL_AMOUNT_TO_DISTRIBUTE_FOR_MARKETMAKER');
+  },
   
   // Market Maker - Sell Configuration
   get SELL_TOKEN_PERCENT(): number {

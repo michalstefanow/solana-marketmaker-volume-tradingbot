@@ -513,15 +513,6 @@ const MarketMakerForBuy = async (abortSignal?: AbortSignal) => {
   console.log(`[MARKET MAKER] Distribute SOL to ${DISTRIBUTE_WALLET_NUM_MARKETMAKER} wallets`)
   console.log("\n[MARKET MAKER] ============================================= \n");
 
-  let txFeeLamports = 5 * 10 ** 6 * TOTAL_PERIOD_MIN * 60 / BUY_INTERVAL_PERIOD_UNIT_SEC;
-
-  if (solBalance < txFeeLamports) {
-    console.log("[MARKET MAKER] Sol balance is not enough for distribution. should be at least ", txFeeLamports)
-    return
-  } else {
-    console.log("[MARKET MAKER] Sol balance is enough for distribution. ", solBalance)
-  }
-
   let data: {
     kp: Keypair;
     buyAmount: number;
@@ -529,31 +520,15 @@ const MarketMakerForBuy = async (abortSignal?: AbortSignal) => {
 
   // main part
 
-  // distribute SOL for market maker until it will be success.
-  console.log("\n[MARKET MAKER] Distributing SOL for market maker...\n");
-  while (true) {
-    if (abortSignal?.aborted) {
-      console.log("[MARKET MAKER] Bot stopped by user request during distribution");
-      break;
-    }
-    console.log("[MARKET MAKER] ---- Market maker distribution ---- \n")
-    // data = await distributeSolForMarketMaker(solanaConnection, mainKp, DISTRIBUTE_WALLET_NUM_MARKETMAKER, txFeeLamports);
-    data = await readJsonAndConvertData(false);
-    if (data == null || data.length == 0) {
-      console.log("[MARKET MAKER] Try again in 30 seconds...")
-      await sleep(30000)
-      continue
-    } else {
-      break;
-    }
+  if (abortSignal?.aborted) {
+    console.log("[MARKET MAKER] Bot stopped by user request during distribution");
+    return;
   }
-
-  // Wait for some min to confirm transaction
-
+  // data = await distributeSolForMarketMaker(solanaConnection, mainKp, DISTRIBUTE_WALLET_NUM_MARKETMAKER, txFeeLamports);
+  data = await readJsonAndConvertData(false);
   if (data == null || data.length == 0) {
-    console.log("[MARKET MAKER] Check if you have enough SOL in your main wallet and then try again...")
-    await sleep(30000)
-    return
+    console.log("[MARKET MAKER] The market_maker_data.json is not found, try again in 30 seconds...")
+    return;
   }
 
   // Main Iterate Part
@@ -624,13 +599,15 @@ const MarketMakerForBuy = async (abortSignal?: AbortSignal) => {
         const randomDelayTime = Math.max(Math.round(Math.random() * 3), 1) * 1000;
         console.log(`[MARKET MAKER] Random delay time: ${randomDelayTime}ms for wallet ${kp.publicKey.toBase58()}`)
         await sleep(randomDelayTime);
+
         let srcKp = kp
         const solBalance = await solanaConnection.getBalance(srcKp.publicKey);
         console.log(`[MARKET MAKER] solBalance ==> ${solBalance / 10 ** 9} SOL`)
 
-        let calbuyAmount = iterator == 1 ? solBalance - 5 * 10 ** 6 : await setBuyAmount(iterator); // lamports
-        console.log(`[MARKET MAKER] calbuyAmount ==> ${Number(calbuyAmount) / 10 ** 9} SOL`)
-        let buyAmount = Math.round(Math.min(Number(calbuyAmount), solBalance) * (1 - (Math.random() * DISTRIBUTE_DELTA_PERFECTAGE / 100)));
+        // let calbuyAmount = iterator == 1 ? solBalance - 5 * 10 ** 6 : await setBuyAmount(iterator); // lamports
+        let buyAmount =  solBalance / iterationNum * (1 - (Math.random() * DISTRIBUTE_DELTA_PERFECTAGE / 100))// lamports
+        // console.log(`[MARKET MAKER] calbuyAmount ==> ${Number(calbuyAmount) / 10 ** 9} SOL`)
+        // let buyAmount = Math.round(Math.min(Number(calbuyAmount), solBalance) * (1 - (Math.random() * DISTRIBUTE_DELTA_PERFECTAGE / 100)));
         console.log(`[MARKET MAKER] buyAmount in Market Maker ==> ${buyAmount / 10 ** 9} SOL`)
 
         const minRentAmount = await getMinimumBalanceForRentExemptMint(solanaConnection, "finalized");
@@ -690,7 +667,7 @@ const MarketMakerForBuy = async (abortSignal?: AbortSignal) => {
       console.log("\n[MARKET MAKER] Sleep for the next iteration, ", sleepTimeMin, "ms");
       console.log("[MARKET MAKER] ============================================================================ \n")
       iterator--;
-      if(iterator == 0) {
+      if (iterator == 0) {
         console.log("[MARKET MAKER] Iterator is 0, Time is Up, break iteration");
         shouldBreak = true;
         return;
@@ -833,22 +810,26 @@ const distributeSolForMarketMaker = async (connection: Connection, mainKp: Keypa
     // console.log("[MARKET MAKER] rentExemptAmount ==> ", rentExemptAmount)
 
     const mainSolBal = await connection.getBalance(mainKp.publicKey);
+    const requiredSolAmount = config.SOL_AMOUNT_TO_DISTRIBUTE_FOR_MARKETMAKER * 10 ** 9 + txFeeLamports * distritbutionNum;
     let minInitialAmountLamports = await setBuyAmount(1);
     console.log("[MARKET MAKER] minInitialAmountLamports ==> ", minInitialAmountLamports);
 
-    if (mainSolBal <= (txFeeLamports + minInitialAmountLamports) * distritbutionNum) {
-      console.log("[MARKET MAKER] Main wallet balance is not enough. should be at least ", (txFeeLamports + minInitialAmountLamports) * distritbutionNum, "But you only have ", mainSolBal, "SOL")
+    if (requiredSolAmount + txFeeLamports > mainSolBal) {
+      console.log("[MARKET MAKER] Your main wallet balance is not enough. You should input at least ", requiredSolAmount + txFeeLamports / 10 ** 9, "SOL but you only input", mainSolBal / 10 ** 9, "SOL.");
       return []
+    } else if (requiredSolAmount <= (txFeeLamports + minInitialAmountLamports) * distritbutionNum) {
+      console.log("[MARKET MAKER - Warning] To reach bonding curve. You can input at least ", (txFeeLamports + minInitialAmountLamports) * distritbutionNum / 10 ** 9 - requiredSolAmount / 10 ** 9, "more SOL later.");
+    } else {
+      console.log("[MARKET MAKER] Main wallet balance is enough. ", mainSolBal)
     }
-    console.log("[MARKET MAKER] Main wallet balance is enough. ", mainSolBal)
 
     let distrubutedSolAmount = 0;
 
     for (let i = 0; i < distritbutionNum; i++) {
       const wallet = Keypair.generate()
       let lamports = i == distritbutionNum - 1
-        ? mainSolBal - distrubutedSolAmount - 5 * 10 ** 6
-        : Math.floor(minInitialAmountLamports * (1 + (Math.random() * DISTRIBUTE_DELTA_PERFECTAGE / 100)) + txFeeLamports);
+        ? requiredSolAmount - distrubutedSolAmount - txFeeLamports
+        : requiredSolAmount / distritbutionNum + (-1) ** Math.floor(Math.random() * 10) * Math.round(DISTRIBUTE_DELTA_PERFECTAGE * Math.random()) * 10 ** 9;
 
       if (lamports <= txFeeLamports) {
         console.log("[MARKET MAKER] Lamports is not enough")

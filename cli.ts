@@ -358,6 +358,7 @@ async function distributeSolToWallets() {
     console.log(`Volume Bot Wallets: ${config.DISTRIBUTE_WALLET_NUM}`);
     console.log(`Market Maker Wallets: ${config.DISTRIBUTE_WALLET_NUM_MARKETMAKER}`);
     console.log(`SOL to Distribute (Volume Bot): ${config.SOL_AMOUNT_TO_DISTRIBUTE} SOL`);
+    console.log(`SOL to Distribute (Market Maker): ${config.SOL_AMOUNT_TO_DISTRIBUTE_FOR_MARKETMAKER} SOL`);
     console.log(`Total Wallets: ${config.DISTRIBUTE_WALLET_NUM + config.DISTRIBUTE_WALLET_NUM_MARKETMAKER}\n`);
 
     const { confirmDistribution } = await inquirer.prompt([
@@ -1315,6 +1316,18 @@ async function updateMarketMakerConfiguration() {
       validate: (input: number) => {
         if (input < 0) {
           return 'Additional time must be 0 or positive';
+        }
+        return true;
+      }
+    },
+    {
+      type: 'number',
+      name: 'SOL_AMOUNT_TO_DISTRIBUTE_FOR_MARKETMAKER',
+      message: '🟠 [MARKET MAKER] SOL amount to distribute for market maker (total):',
+      default: currentConfig.SOL_AMOUNT_TO_DISTRIBUTE_FOR_MARKETMAKER,
+      validate: (input: number) => {
+        if (input <= 0) {
+          return 'SOL amount must be greater than 0';
         }
         return true;
       }
