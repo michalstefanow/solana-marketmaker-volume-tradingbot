@@ -1,6 +1,6 @@
 import { promptForConfiguration, displayConfiguration } from './utils/cli-prompts';
 import { setGlobalConfig, getGlobalConfig, loadConfigFromFile, hasConfiguration } from './utils/config-manager';
-import { displaySavedConfigInfo, updateDistributionTimestamp, hasDistributionTimePassed, hasDistributionOccurred, getTimeUntilNextDistribution } from './utils/config-persistence';
+import { displaySavedConfigInfo, updateDistributionTimestamp, hasDistributionTimePassed, hasDistributionOccurred, getTimeUntilNextDistribution, clearDistributionTimestamp, getDistributionDelayMinutes } from './utils/config-persistence';
 import inquirer from 'inquirer';
 import { PublicKey } from '@solana/web3.js';
 import { bondingCurveStatics, getBondingCurvePDA, getTokenMint } from './utils/pumpfun';
@@ -426,7 +426,8 @@ async function distributeSolToWallets() {
     console.log('==============================');
     console.log(`Volume Bot wallets: ${volumeBotData.length}`);
     console.log(`Market Maker wallets: ${marketMakerData.length}`);
-    console.log('\n⏰ Other bot options will be available in 24 hours.\n');
+    const delayMinutes = getDistributionDelayMinutes();
+    console.log(`\n⏰ Other bot options will be available in ${delayMinutes} minutes.\n`);
 
   } catch (error) {
     console.error('❌ Error during SOL distribution:', error);
@@ -435,12 +436,13 @@ async function distributeSolToWallets() {
 
 async function launchVolumeBot() {
   try {
-    // Check if distribution has occurred and 24 hours have passed
+    // Check if distribution has occurred and configured delay has passed
     const hasDistribution = hasDistributionOccurred();
     const canUseOtherOptions = hasDistributionTimePassed();
+    const delayMinutes = getDistributionDelayMinutes();
     
     if (!hasDistribution) {
-      console.log(`\n❌ Bot launch is not available yet. Distribute SOL first, then wait 24 hours.\n`);
+      console.log(`\n❌ Bot launch is not available yet. Distribute SOL first, then wait ${delayMinutes} minutes.\n`);
       return;
     }
     
@@ -528,12 +530,13 @@ async function launchVolumeBot() {
 
 async function launchSellBot() {
   try {
-    // Check if distribution has occurred and 24 hours have passed
+    // Check if distribution has occurred and configured delay has passed
     const hasDistribution = hasDistributionOccurred();
     const canUseOtherOptions = hasDistributionTimePassed();
+    const delayMinutes = getDistributionDelayMinutes();
     
     if (!hasDistribution) {
-      console.log(`\n❌ Sell bot launch is not available yet. Distribute SOL first, then wait 24 hours.\n`);
+      console.log(`\n❌ Sell bot launch is not available yet. Distribute SOL first, then wait ${delayMinutes} minutes.\n`);
       return;
     }
     
@@ -693,10 +696,11 @@ async function showBotStatus() {
     console.log('💡 Use "Stop Bot" to halt the bot');
   }
   
+  const delayMinutes = getDistributionDelayMinutes();
   if (!hasDistribution) {
-    console.log('💡 Distribute SOL first, then wait 24 hours before other options become available');
+    console.log(`💡 Distribute SOL first, then wait ${delayMinutes} minutes before other options become available`);
   } else if (!canUseOtherOptions) {
-    console.log('💡 Other bot options will be available after 24 hours from last distribution');
+    console.log(`💡 Other bot options will be available after ${delayMinutes} minutes from last distribution`);
   }
   console.log('');
 }
@@ -763,6 +767,29 @@ async function collectWithSell() {
     console.log("============================================================================ \n")
 
     console.log('✅ Collection completed!');
+    
+    // Clear distribution timestamp to block bot launch until SOL is redistributed
+    clearDistributionTimestamp();
+    
+    console.log('\n⚠️  IMPORTANT: All SOL has been collected from wallets!');
+    console.log('📌 Bot launch is now BLOCKED until you distribute SOL to wallets.\n');
+
+    // Ask if user wants to distribute SOL now
+    const { distribute } = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'distribute',
+        message: '💰 Do you want to distribute SOL to wallets now?',
+        default: true
+      }
+    ]);
+
+    if (distribute) {
+      await distributeSolToWallets();
+    } else {
+      console.log('\n📝 Remember: Bot launch is BLOCKED until you distribute SOL!');
+      console.log('   Go to "💰 Wallet & Distribution" → "📤 Distribute SOL to Wallets"\n');
+    }
   } catch (error) {
     console.error('❌ Error during collection:', error);
   }
@@ -999,7 +1026,7 @@ async function viewMarketInfo() {
       console.log('❌ Error fetching bonding curve account');
       return;
     }
-    console.log(bondingCurveAccount);
+
     console.log(`Bonding Curve Balance: ${Number(bondingCurveAccount.virtualSolReserves) / 10 ** 9} SOL`);
     console.log(`Bonding Curve Market Cap: ${Number(bondingCurveAccount.getMarketCapSOL()) / 10 ** 9} SOL`);
     console.log(`Token Price: ${(Number(bondingCurveAccount.virtualSolReserves) / (Number(bondingCurveAccount.virtualTokenReserves) * (10 ** (9 - tokenMint.decimals))))} SOL`);
@@ -1012,12 +1039,13 @@ async function extendBotRuntime() {
   console.log('\n⏰ Extend Bot Runtime');
   console.log('====================\n');
 
-  // Check if distribution has occurred and 24 hours have passed
+  // Check if distribution has occurred and configured delay has passed
   const hasDistribution = hasDistributionOccurred();
   const canUseOtherOptions = hasDistributionTimePassed();
+  const delayMinutes = getDistributionDelayMinutes();
   
   if (!hasDistribution) {
-    console.log(`❌ Bot extension is not available yet. Distribute SOL first, then wait 24 hours.\n`);
+    console.log(`❌ Bot extension is not available yet. Distribute SOL first, then wait ${delayMinutes} minutes.\n`);
     return;
   }
   

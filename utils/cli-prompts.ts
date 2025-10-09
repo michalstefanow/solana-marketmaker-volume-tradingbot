@@ -25,6 +25,7 @@ export interface BotConfig {
   SOL_AMOUNT_TO_DISTRIBUTE: number;
   DISTRIBUTE_INTERVAL_MIN: number;
   DISTRIBUTE_INTERVAL_MAX: number;
+  DISTRIBUTE_TO_RUN_DELAY_MIN: number; // Delay in minutes before bot can run after distribution
 
   // Fee Configuration
   FEE_LEVEL: number;
@@ -106,6 +107,7 @@ function loadAllEnvDefaults(): Partial<BotConfig> {
     SOL_AMOUNT_TO_DISTRIBUTE: process.env.SOL_AMOUNT_TO_DISTRIBUTE ? Number(process.env.SOL_AMOUNT_TO_DISTRIBUTE) : 1,
     DISTRIBUTE_INTERVAL_MIN: process.env.DISTRIBUTE_INTERVAL_MIN ? Number(process.env.DISTRIBUTE_INTERVAL_MIN) : 30,
     DISTRIBUTE_INTERVAL_MAX: process.env.DISTRIBUTE_INTERVAL_MAX ? Number(process.env.DISTRIBUTE_INTERVAL_MAX) : 60,
+    DISTRIBUTE_TO_RUN_DELAY_MIN: process.env.DISTRIBUTE_TO_RUN_DELAY_MIN ? Number(process.env.DISTRIBUTE_TO_RUN_DELAY_MIN) : 5,
 
     // Fee Configuration
     FEE_LEVEL: process.env.FEE_LEVEL ? Number(process.env.FEE_LEVEL) : 1,
@@ -309,6 +311,18 @@ export async function promptForConfiguration(): Promise<BotConfig> {
       validate: (input: number) => {
         if (input < 1) {
           return 'Distribution interval must be at least 1 second';
+        }
+        return true;
+      }
+    },
+    {
+      type: 'number',
+      name: 'DISTRIBUTE_TO_RUN_DELAY_MIN',
+      message: '⏰ [GENERAL] Delay after distribution before bot can run (minutes):',
+      default: envDefaults.DISTRIBUTE_TO_RUN_DELAY_MIN,
+      validate: (input: number) => {
+        if (input < 0) {
+          return 'Delay must be 0 or greater';
         }
         return true;
       }
@@ -598,6 +612,7 @@ export function displayConfiguration(config: BotConfig): void {
   console.log(`Buy Range: ${config.BUY_LOWER_PERCENT}%-${config.BUY_UPPER_PERCENT}%`);
   console.log(`Wallets: ${config.DISTRIBUTE_WALLET_NUM}`);
   console.log(`SOL to Distribute: ${config.SOL_AMOUNT_TO_DISTRIBUTE}`);
+  console.log(`Distribution Delay: ${config.DISTRIBUTE_TO_RUN_DELAY_MIN} minutes`);
   console.log(`JITO Mode: ${config.JITO_MODE ? 'Enabled' : 'Disabled'}`);
   console.log(`Fee Level: ${config.FEE_LEVEL}`);
   console.log(`Gather to Other: ${config.GATHER_TO_OTHER_ADDRESS ? 'Yes' : 'No'}`);
