@@ -130,9 +130,10 @@ export function hasDistributionTimePassed(): boolean {
 
     const now = Date.now();
     const elapsed = now - savedConfig.lastDistributionTimestamp;
-    const twentyFourHours = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+    const delayMinutes = savedConfig.config.DISTRIBUTE_TO_RUN_DELAY_MIN || 5; // Default to 5 minutes
+    const delayMs = delayMinutes * 60 * 1000; // Convert minutes to milliseconds
 
-    return elapsed >= twentyFourHours;
+    return elapsed >= delayMs;
   } catch (error) {
     console.error('❌ Error checking distribution time:', error);
     return false; // Default to false on error to block operations for safety
@@ -158,8 +159,9 @@ export function getTimeUntilNextDistribution(): string {
 
     const now = Date.now();
     const elapsed = now - savedConfig.lastDistributionTimestamp;
-    const twentyFourHours = 24 * 60 * 60 * 1000;
-    const remaining = twentyFourHours - elapsed;
+    const delayMinutes = savedConfig.config.DISTRIBUTE_TO_RUN_DELAY_MIN || 5; // Default to 5 minutes
+    const delayMs = delayMinutes * 60 * 1000; // Convert minutes to milliseconds
+    const remaining = delayMs - elapsed;
 
     if (remaining <= 0) {
       return 'Available now';
@@ -168,8 +170,41 @@ export function getTimeUntilNextDistribution(): string {
     const hours = Math.floor(remaining / (60 * 60 * 1000));
     const minutes = Math.floor((remaining % (60 * 60 * 1000)) / (60 * 1000));
 
-    return `${hours}h ${minutes}m remaining`;
+    if (hours > 0) {
+      return `${hours}h ${minutes}m remaining`;
+    } else {
+      return `${minutes}m remaining`;
+    }
   } catch (error) {
     return 'Unknown';
+  }
+}
+
+export function clearDistributionTimestamp(): void {
+  try {
+    const existingConfig = loadConfiguration();
+    if (!existingConfig) {
+      console.error('❌ No configuration found to update');
+      return;
+    }
+
+    const updatedConfig: SavedConfig = {
+      ...existingConfig,
+      lastDistributionTimestamp: undefined
+    };
+
+    fs.writeFileSync(CONFIG_FILE_PATH, JSON.stringify(updatedConfig, null, 2));
+    console.log('✅ Distribution timestamp cleared - SOL distribution required before launching bot');
+  } catch (error) {
+    console.error('❌ Error clearing distribution timestamp:', error);
+  }
+}
+
+export function getDistributionDelayMinutes(): number {
+  try {
+    const savedConfig = loadConfiguration();
+    return savedConfig?.config.DISTRIBUTE_TO_RUN_DELAY_MIN || 5;
+  } catch (error) {
+    return 5; // Default to 5 minutes
   }
 }

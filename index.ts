@@ -60,17 +60,10 @@ export const solanaConnection = new Connection(RPC_ENDPOINT, {
 export const mainKp = Keypair.fromSecretKey(base58.decode(PRIVATE_KEY))
 const baseMint = new PublicKey(TOKEN_MINT);
 const baseMintPumpswap = new PublicKey(config.TOKEN_MINT_PUMPSWAP);
-const distritbutionNum = DISTRIBUTE_WALLET_NUM > 20 ? 20 : DISTRIBUTE_WALLET_NUM
+const distritbutionNum = DISTRIBUTE_WALLET_NUM;
 const jitoCommitment: Commitment = "confirmed"
 
-// const airdropAddress = new PublicKey(AIRDROP_ADDRESS)
-let makerNum = 0
-
 const totalProcesses: Set<string> = new Set()
-const oneTimeBoughtProcesses: Set<string> = new Set()
-const twoTimeBoughtProcesses: Set<string> = new Set()
-const soldProcesses: Set<string> = new Set()
-const successfulProcesses: Set<string> = new Set()
 
 // Common Function
 const buy = async (newWallet: Keypair, baseMint: PublicKey, buyAmount: number, isVolumeBot: boolean = true) => {
@@ -245,14 +238,16 @@ const VolumeBot = async (abortSignal?: AbortSignal) => {
         buyAmount: number;
       }[] | null = null
 
-      data = await readJsonAndConvertData(true);
-      // data = readJson("data.json");
+      data = (await readJsonAndConvertData(true));
       if (data == null || data.length == 0) {
         console.log("[VOLUME BOT] Failed to fetch data from data.json")
         await sleep(30000)
         continue
       }
       const interval = Math.floor((DISTRIBUTE_INTERVAL_MIN + Math.random() * (DISTRIBUTE_INTERVAL_MAX - DISTRIBUTE_INTERVAL_MIN)) * 1000)
+
+      data = data.splice(data.length - distritbutionNum, distritbutionNum);
+      console.log("[VOLUME BOT] data ==> ", data);
 
       data.map(async ({ kp }, n) => {
 
@@ -285,6 +280,10 @@ const VolumeBot = async (abortSignal?: AbortSignal) => {
         let i = 0
         while (true) {
           try {
+            if (abortSignal?.aborted) {
+              console.log("[VOLUME BOT] Bot stopped by user request");
+              break;
+            }
             if (i > 50) {
               console.log("[VOLUME BOT] Error in buy transaction")
               break
@@ -306,6 +305,10 @@ const VolumeBot = async (abortSignal?: AbortSignal) => {
         let l = 0
         while (true) {
           try {
+            if (abortSignal?.aborted) {
+              console.log("[VOLUME BOT] Bot stopped by user request");
+              break;
+            }
             if (l > 50) {
               console.log("[VOLUME BOT] Error in second buy transaction")
               break
@@ -322,12 +325,15 @@ const VolumeBot = async (abortSignal?: AbortSignal) => {
           }
         }
 
-
         await sleep(SELL_WAIT_INTERVAL * 1000)
 
         // try selling until success
         let j = 0
         while (true) {
+          if (abortSignal?.aborted) {
+            console.log("[VOLUME BOT] Bot stopped by user request");
+            break;
+          }
           if (j > 50) {
             console.log("[VOLUME BOT] Error in sell transaction")
             return
@@ -341,70 +347,6 @@ const VolumeBot = async (abortSignal?: AbortSignal) => {
           }
         }
 
-
-        // SOL transfer part
-        const balance = await solanaConnection.getBalance(srcKp.publicKey)
-
-        let k = 0
-        while (true) {
-          try {
-            if (k > 5) {
-              console.log("[VOLUME BOT] Failed to transfer SOL to main wallet in one of sub wallet")
-              return
-            }
-            const baseAta = getAssociatedTokenAddressSync(baseMint, srcKp.publicKey)
-            const tx = new Transaction().add(
-              ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 10_000 * FEE_LEVEL }),
-              ComputeBudgetProgram.setComputeUnitLimit({ units: 5_000 }),
-              SystemProgram.transfer({
-                fromPubkey: srcKp.publicKey,
-                toPubkey: mainKp.publicKey,
-                lamports: balance
-              })
-            )
-            const baseInfo = await solanaConnection.getAccountInfo(baseAta)
-            if ((makerNum % 4 === 0 || makerNum % 11 === 0) && baseInfo) {
-              // tx.add(
-              //   createCloseAccountInstruction(
-              //     baseAta,
-              //     airdropAddress,
-              //     srcKp.publicKey
-              //   )
-              // )
-              // console.log(" --- Airdropped --- ")
-            } else {
-              tx.add(
-                createCloseAccountInstruction(
-                  baseAta,
-                  mainKp.publicKey,
-                  srcKp.publicKey
-                )
-              )
-            }
-
-            tx.feePayer = mainKp.publicKey
-            tx.recentBlockhash = (await solanaConnection.getLatestBlockhash()).blockhash
-
-            // console.log(await solanaConnection.simulateTransaction(tx))
-
-            const sig = await sendAndConfirmTransaction(solanaConnection, tx, [srcKp, mainKp], { skipPreflight: true, commitment: "confirmed" })
-            // console.log(await solanaConnection.getBalance(destinationKp.publicKey) / 10 ** 9, "SOL")
-            console.log(`[VOLUME BOT] Gathered SOL back to main wallet, https://solscan.io/tx/${sig}`)
-
-            // filter the keypair that is completed (after this procedure, only keypairs with sol or ata will be saved in data.json)
-            const walletsData = readJson()
-            const wallets = walletsData.filter(({ privateKey }) => base58.encode(srcKp.secretKey) != privateKey)
-            saveNewFile(wallets)
-            break
-          } catch (error) {
-            console.log("[VOLUME BOT] Error in gather transaction ", error)
-            k++
-          }
-        }
-
-        // one wallet procedure ended 
-        makerNum++
-        console.log("[VOLUME BOT] Maker number in total : ", makerNum)
       })
 
       // Check for abort signal during sleep
@@ -432,16 +374,23 @@ const distributeSol = async (connection: Connection, mainKp: Keypair, distritbut
       ComputeBudgetProgram.setComputeUnitLimit({ units: 12_000 })
     )
     const mainSolBal = await connection.getBalance(mainKp.publicKey)
+    console.log("[VOLUME BOT] Main wallet", mainKp.publicKey.toBase58(), "balance: ", mainSolBal / 10 ** 9, "SOL")
     if (mainSolBal <= 5 * 10 ** 7) {
       console.log("Main wallet balance is not enough")
       return []
     }
 
-    let solAmount = Math.floor(SOL_AMOUNT_TO_DISTRIBUTE * 10 ** 9 / distritbutionNum)
+    let solAmount = Math.floor(SOL_AMOUNT_TO_DISTRIBUTE * 10 ** 9 / distritbutionNum);
+
+    if (mainSolBal < solAmount) {
+      console.log("Main wallet balance is not enough for distribution")
+      return []
+    }
 
     for (let i = 0; i < distritbutionNum; i++) {
       const wallet = Keypair.generate()
       let lamports = Math.floor(solAmount * (1 - (Math.random() * 0.2)))
+      console.log("[VOLUME BOT] Wallet", wallet.publicKey.toBase58(), "balance: ", lamports / 10 ** 9, "SOL")
 
       wallets.push({ kp: wallet, buyAmount: lamports })
       sendSolTx.push(
@@ -477,7 +426,14 @@ const distributeSol = async (connection: Connection, mainKp: Keypair, distritbut
       }).compileToV0Message()
       const transaction = new VersionedTransaction(messageV0)
       transaction.sign([mainKp])
-      // console.log(await connection.simulateTransaction(transaction))
+
+      const simulateResult = await solanaConnection.simulateTransaction(transaction, { sigVerify: true })
+      if (simulateResult.value.err) {
+        console.log("[VOLUME BOT] Simulation failed in distributeSol")
+        console.log("Error : ", simulateResult)
+        return null
+      }
+
       let txSig
       if (JITO_MODE) {
         txSig = await executeJitoTx([transaction], mainKp, jitoCommitment)
@@ -516,7 +472,7 @@ const MarketMakerForBuy = async (abortSignal?: AbortSignal) => {
   let txFeeLamports = 5 * 10 ** 6 * TOTAL_PERIOD_MIN * 60 / BUY_INTERVAL_PERIOD_UNIT_SEC;
 
   if (solBalance < txFeeLamports) {
-    console.log("[MARKET MAKER] Sol balance is not enough for distribution. should be at least ", txFeeLamports)
+    console.log("[MARKET MAKER] Sol balance is not enough for distribution. should be at least ", txFeeLamports / 10 ** 9, "SOL")
     return
   } else {
     console.log("[MARKET MAKER] Sol balance is enough for distribution. ", solBalance)
@@ -555,6 +511,9 @@ const MarketMakerForBuy = async (abortSignal?: AbortSignal) => {
     await sleep(30000)
     return
   }
+
+  data = data.splice(data.length - DISTRIBUTE_WALLET_NUM_MARKETMAKER, DISTRIBUTE_WALLET_NUM_MARKETMAKER);
+  console.log("[MARKET MAKER] data ==> ", data);
 
   // Main Iterate Part
   const totalPeriod = TOTAL_PERIOD_MIN * 60;  // ms
@@ -690,7 +649,7 @@ const MarketMakerForBuy = async (abortSignal?: AbortSignal) => {
       console.log("\n[MARKET MAKER] Sleep for the next iteration, ", sleepTimeMin, "ms");
       console.log("[MARKET MAKER] ============================================================================ \n")
       iterator--;
-      if(iterator == 0) {
+      if (iterator == 0) {
         console.log("[MARKET MAKER] Iterator is 0, Time is Up, break iteration");
         shouldBreak = true;
         return;
