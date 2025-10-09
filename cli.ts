@@ -1,6 +1,24 @@
 import { promptForConfiguration, displayConfiguration } from './utils/cli-prompts';
 import { setGlobalConfig, getGlobalConfig, loadConfigFromFile, hasConfiguration } from './utils/config-manager';
-import { displaySavedConfigInfo, updateDistributionTimestamp, hasDistributionTimePassed, hasDistributionOccurred, getTimeUntilNextDistribution, clearDistributionTimestamp, getDistributionDelayMinutes } from './utils/config-persistence';
+import { 
+  displaySavedConfigInfo, 
+  updateDistributionTimestamp, 
+  hasDistributionTimePassed, 
+  hasDistributionOccurred, 
+  getTimeUntilNextDistribution, 
+  clearDistributionTimestamp, 
+  getDistributionDelayMinutes,
+  updateVolumeBotDistributionTimestamp,
+  updateMarketMakerDistributionTimestamp,
+  hasVolumeBotDistributionTimePassed,
+  hasMarketMakerDistributionTimePassed,
+  hasVolumeBotDistributionOccurred,
+  hasMarketMakerDistributionOccurred,
+  getTimeUntilVolumeBotDistribution,
+  getTimeUntilMarketMakerDistribution,
+  clearVolumeBotDistributionTimestamp,
+  clearMarketMakerDistributionTimestamp
+} from './utils/config-persistence';
 import inquirer from 'inquirer';
 import { PublicKey } from '@solana/web3.js';
 import { bondingCurveStatics, getBondingCurvePDA, getTokenMint } from './utils/pumpfun';
@@ -273,15 +291,67 @@ async function manageBot() {
   console.log('\n🤖 Bot Management');
   console.log('=================\n');
 
-  // Check distribution status
-  const hasDistribution = hasDistributionOccurred();
-  const canUseOtherOptions = hasDistributionTimePassed();
+  // Check distribution status for both bots
+  const hasVolumeBotDist = hasVolumeBotDistributionOccurred();
+  const canLaunchVolumeBot = hasVolumeBotDistributionTimePassed();
+  const hasMarketMakerDist = hasMarketMakerDistributionOccurred();
+  const canLaunchMarketMaker = hasMarketMakerDistributionTimePassed();
   
-  let statusMessage = '';
-  if (!hasDistribution) {
-    statusMessage = ' (Distribution required first)';
-  } else if (!canUseOtherOptions) {
-    statusMessage = ` (${getTimeUntilNextDistribution()})`;
+  const delayMinutes = getDistributionDelayMinutes();
+  
+  let volumeBotStatus = '';
+  if (!hasVolumeBotDist) {
+    volumeBotStatus = ` (Distribute SOL first, then wait ${delayMinutes}min)`;
+  } else if (!canLaunchVolumeBot) {
+    volumeBotStatus = ` (${getTimeUntilVolumeBotDistribution()})`;
+  }
+
+  let marketMakerStatus = '';
+  if (!hasMarketMakerDist) {
+    marketMakerStatus = ` (Distribute SOL first, then wait ${delayMinutes}min)`;
+  } else if (!canLaunchMarketMaker) {
+    marketMakerStatus = ` (${getTimeUntilMarketMakerDistribution()})`;
+  }
+
+  const volumeBotTimeRemaining = getTimeUntilVolumeBotDistribution();
+  const marketMakerTimeRemaining = getTimeUntilMarketMakerDistribution();
+  
+  // Check if distributions are synchronized (both exist and both can launch, or neither exist)
+  const distributionsAreSynced = (hasVolumeBotDist && hasMarketMakerDist && canLaunchVolumeBot && canLaunchMarketMaker) || 
+                                  (!hasVolumeBotDist && !hasMarketMakerDist);
+  
+  // Check if a single bot is currently running (blocks "both" option)
+  const isSingleBotRunning = isBotRunning && (currentBotType === 'Volume Bot' || currentBotType === 'Market Maker');
+  
+  const canLaunchBoth = canLaunchVolumeBot && canLaunchMarketMaker && distributionsAreSynced && !isBotRunning;
+  const canDistributeBoth = !hasVolumeBotDist && !hasMarketMakerDist; // Only when BOTH are not distributed
+  
+  let bothLaunchStatus = '';
+  let bothDistributeStatus = '';
+  
+  if (!canLaunchBoth) {
+    if (isSingleBotRunning) {
+      bothLaunchStatus = ` (One bot already running - stop it first)`;
+    } else if (!hasVolumeBotDist && !hasMarketMakerDist) {
+      bothLaunchStatus = ` (Distribute both first, then wait ${delayMinutes}min)`;
+    } else if (!distributionsAreSynced) {
+      bothLaunchStatus = ` (Bots not synced - one already distributed separately)`;
+    } else if (isBotRunning) {
+      bothLaunchStatus = ` (Bot already running)`;
+    } else {
+      bothLaunchStatus = ` (Wait for both: VB ${volumeBotTimeRemaining}, MM ${marketMakerTimeRemaining})`;
+    }
+  }
+  
+  // Disable "Distribute Both" if either one is already distributed
+  if (!canDistributeBoth) {
+    if (hasVolumeBotDist && hasMarketMakerDist) {
+      bothDistributeStatus = ` (Already distributed for both)`;
+    } else if (hasVolumeBotDist && !hasMarketMakerDist) {
+      bothDistributeStatus = ` (Volume Bot already distributed - use individual options)`;
+    } else if (!hasVolumeBotDist && hasMarketMakerDist) {
+      bothDistributeStatus = ` (Market Maker already distributed - use individual options)`;
+    }
   }
 
   const { action } = await inquirer.prompt([
@@ -290,9 +360,13 @@ async function manageBot() {
       name: 'action',
       message: 'What would you like to do?',
       choices: [
-        { name: '🚀 Distribute SOL', value: 'distribute' },
-        { name: '🚀 Launch Bot (Start buying and selling)', value: 'launch', disabled: !canUseOtherOptions ? `Distribution required + 24hrs wait${statusMessage}` : false },
-        { name: '💰 Launch Sell Bot (Start selling only)', value: 'sell', disabled: !canUseOtherOptions ? `Distribution required + 24hrs wait${statusMessage}` : false },
+        { name: '📤 Distribute SOL for Volume Bot', value: 'distribute-volume' },
+        { name: '📤 Distribute SOL for Market Maker', value: 'distribute-market' },
+        { name: '📤 Distribute SOL for Both (Volume Bot + Market Maker)', value: 'distribute-both', disabled: !canDistributeBoth ? bothDistributeStatus : false },
+        { name: '🔵 Launch Volume Bot Only', value: 'launch-volume', disabled: !canLaunchVolumeBot ? volumeBotStatus : false },
+        { name: '🟠 Launch Market Maker Only', value: 'launch-market', disabled: !canLaunchMarketMaker ? marketMakerStatus : false },
+        { name: '🚀 Launch Both (Volume Bot + Market Maker)', value: 'launch-both', disabled: !canLaunchBoth ? bothLaunchStatus : false },
+        { name: '💰 Launch Sell Bot', value: 'sell', disabled: !canLaunchMarketMaker ? marketMakerStatus : false },
         { name: '⏹️  Stop Bot', value: 'stop', disabled: !isBotRunning ? 'No bot running' : false },
         { name: '⏰ Extend Bot Runtime', value: 'extend', disabled: !isBotRunning ? 'No bot running' : false },
         { name: '📊 Bot Status', value: 'status' },
@@ -303,11 +377,23 @@ async function manageBot() {
   ]);
 
   switch (action) {
-    case 'distribute':
-      await distributeSolToWallets();
+    case 'distribute-volume':
+      await distributeSolForVolumeBot();
       break;
-    case 'launch':
-      await launchVolumeBot();
+    case 'distribute-market':
+      await distributeSolForMarketMaker();
+      break;
+    case 'distribute-both':
+      await distributeSolForBoth();
+      break;
+    case 'launch-volume':
+      await launchVolumeBotOnly();
+      break;
+    case 'launch-market':
+      await launchMarketMakerOnly();
+      break;
+    case 'launch-both':
+      await launchBoth();
       break;
     case 'sell':
       await launchSellBot();
@@ -329,12 +415,160 @@ async function manageBot() {
   }
 }
 
-async function distributeSolToWallets() {
-  console.log('\n🚀 Distribute SOL to Volume Bot & Market Maker Wallets');
-  console.log('======================================================\n');
+async function distributeSolForVolumeBot() {
+  console.log('\n🔵 Distribute SOL for Volume Bot');
+  console.log('==================================\n');
 
   try {
-    // Validate configuration before distributing
+    // Validate configuration
+    const savedConfig = loadConfigFromFile();
+    if (!savedConfig) {
+      console.log('\n❌ Configuration file not found!');
+      console.log('Please initialize configuration first.\n');
+      return;
+    }
+
+    // Ensure global config is loaded
+    try {
+      getGlobalConfig();
+    } catch (error) {
+      console.log('\n🔄 Loading configuration...');
+      setGlobalConfig(savedConfig.config, false);
+    }
+
+    const config = getGlobalConfig();
+
+    // Show distribution summary
+    console.log('📊 Distribution Summary:');
+    console.log('========================');
+    console.log(`Volume Bot Wallets: ${config.DISTRIBUTE_WALLET_NUM}`);
+    console.log(`SOL to Distribute: ${config.SOL_AMOUNT_TO_DISTRIBUTE} SOL\n`);
+
+    const { confirmDistribution } = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'confirmDistribution',
+        message: 'Proceed with Volume Bot SOL distribution?',
+        default: true
+      }
+    ]);
+
+    if (!confirmDistribution) {
+      console.log('❌ Distribution cancelled.\n');
+      return;
+    }
+
+    console.log('\n🚀 Starting Volume Bot SOL distribution...\n');
+
+    // Import the distribution function from index.ts
+    const indexModule = await import('./index');
+    const { solanaConnection, mainKp, distributeSol } = indexModule;
+
+    const volumeBotData = await distributeSol(solanaConnection, mainKp, config.DISTRIBUTE_WALLET_NUM);
+    
+    if (!volumeBotData || volumeBotData.length === 0) {
+      console.log('❌ Volume Bot distribution failed.\n');
+      return;
+    }
+    
+    console.log('✅ Volume Bot distribution successful!\n');
+
+    // Update the Volume Bot distribution timestamp
+    updateVolumeBotDistributionTimestamp();
+    
+    console.log('✅ Volume Bot SOL Distribution Complete!');
+    console.log('=========================================');
+    console.log(`Volume Bot wallets: ${volumeBotData.length}`);
+    const delayMinutes = getDistributionDelayMinutes();
+    console.log(`\n⏰ Volume Bot launch will be available in ${delayMinutes} minutes.\n`);
+
+  } catch (error) {
+    console.error('❌ Error during Volume Bot SOL distribution:', error);
+  }
+}
+
+async function distributeSolForMarketMaker() {
+  console.log('\n🟠 Distribute SOL for Market Maker');
+  console.log('===================================\n');
+
+  try {
+    // Validate configuration
+    const savedConfig = loadConfigFromFile();
+    if (!savedConfig) {
+      console.log('\n❌ Configuration file not found!');
+      console.log('Please initialize configuration first.\n');
+      return;
+    }
+
+    // Ensure global config is loaded
+    try {
+      getGlobalConfig();
+    } catch (error) {
+      console.log('\n🔄 Loading configuration...');
+      setGlobalConfig(savedConfig.config, false);
+    }
+
+    const config = getGlobalConfig();
+
+    // Show distribution summary
+    console.log('📊 Distribution Summary:');
+    console.log('========================');
+    console.log(`Market Maker Wallets: ${config.DISTRIBUTE_WALLET_NUM_MARKETMAKER}`);
+    console.log(`SOL to Distribute: ${config.SOL_AMOUNT_TO_DISTRIBUTE_FOR_MARKETMAKER} SOL\n`);
+
+    const { confirmDistribution } = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'confirmDistribution',
+        message: 'Proceed with Market Maker SOL distribution?',
+        default: true
+      }
+    ]);
+
+    if (!confirmDistribution) {
+      console.log('❌ Distribution cancelled.\n');
+      return;
+    }
+
+    console.log('\n🚀 Starting Market Maker SOL distribution...\n');
+
+    // Import the distribution function from index.ts
+    const indexModule = await import('./index');
+    const { solanaConnection, mainKp, distributeSolForMarketMaker } = indexModule;
+    
+    const marketMakerData = await distributeSolForMarketMaker(
+      solanaConnection,
+      mainKp,
+      config.DISTRIBUTE_WALLET_NUM_MARKETMAKER
+    );
+    
+    if (!marketMakerData || marketMakerData.length === 0) {
+      console.log('❌ Market Maker distribution failed.\n');
+      return;
+    }
+    
+    console.log('✅ Market Maker distribution successful!\n');
+
+    // Update the Market Maker distribution timestamp
+    updateMarketMakerDistributionTimestamp();
+    
+    console.log('✅ Market Maker SOL Distribution Complete!');
+    console.log('===========================================');
+    console.log(`Market Maker wallets: ${marketMakerData.length}`);
+    const delayMinutes = getDistributionDelayMinutes();
+    console.log(`\n⏰ Market Maker launch will be available in ${delayMinutes} minutes.\n`);
+
+  } catch (error) {
+    console.error('❌ Error during Market Maker SOL distribution:', error);
+  }
+}
+
+async function distributeSolForBoth() {
+  console.log('\n🚀 Distribute SOL for Both (Volume Bot + Market Maker)');
+  console.log('=======================================================\n');
+
+  try {
+    // Validate configuration
     const savedConfig = loadConfigFromFile();
     if (!savedConfig) {
       console.log('\n❌ Configuration file not found!');
@@ -365,7 +599,7 @@ async function distributeSolToWallets() {
       {
         type: 'confirm',
         name: 'confirmDistribution',
-        message: 'Proceed with SOL distribution?',
+        message: 'Proceed with SOL distribution for both?',
         default: true
       }
     ]);
@@ -375,12 +609,10 @@ async function distributeSolToWallets() {
       return;
     }
 
-    console.log('\n🚀 Starting SOL distribution...\n');
+    console.log('\n🚀 Starting SOL distribution for both...\n');
 
     // Import the distribution functions from index.ts
     const indexModule = await import('./index');
-    
-    // Get the necessary objects from index
     const { solanaConnection, mainKp } = indexModule;
 
     // Distribute for Volume Bot
@@ -402,14 +634,10 @@ async function distributeSolToWallets() {
     console.log('📤 Distributing SOL for Market Maker...');
     const { distributeSolForMarketMaker } = await import('./index');
     
-    // Calculate transaction fee for market maker
-    let txFeeLamports = 5 * 10 ** 6 * config.TOTAL_PERIOD_MIN * 60 / config.BUY_INTERVAL_PERIOD_UNIT_SEC;
-    
     const marketMakerData = await distributeSolForMarketMaker(
       solanaConnection,
       mainKp,
       config.DISTRIBUTE_WALLET_NUM_MARKETMAKER,
-      txFeeLamports
     );
     
     if (!marketMakerData || marketMakerData.length === 0) {
@@ -419,36 +647,203 @@ async function distributeSolToWallets() {
     
     console.log('✅ Market Maker distribution successful!\n');
 
-    // Update the distribution timestamp
-    updateDistributionTimestamp();
+    // Update both distribution timestamps
+    updateVolumeBotDistributionTimestamp();
+    updateMarketMakerDistributionTimestamp();
     
-    console.log('✅ SOL Distribution Complete!');
-    console.log('==============================');
+    console.log('✅ SOL Distribution Complete for Both!');
+    console.log('======================================');
     console.log(`Volume Bot wallets: ${volumeBotData.length}`);
     console.log(`Market Maker wallets: ${marketMakerData.length}`);
     const delayMinutes = getDistributionDelayMinutes();
-    console.log(`\n⏰ Other bot options will be available in ${delayMinutes} minutes.\n`);
+    console.log(`\n⏰ Both bots will be available to launch in ${delayMinutes} minutes.\n`);
 
   } catch (error) {
     console.error('❌ Error during SOL distribution:', error);
   }
 }
 
-async function launchVolumeBot() {
+async function launchVolumeBotOnly() {
   try {
-    // Check if distribution has occurred and configured delay has passed
-    const hasDistribution = hasDistributionOccurred();
-    const canUseOtherOptions = hasDistributionTimePassed();
+    // Check if Volume Bot distribution has occurred and configured delay has passed
+    const hasDistribution = hasVolumeBotDistributionOccurred();
+    const canLaunch = hasVolumeBotDistributionTimePassed();
     const delayMinutes = getDistributionDelayMinutes();
     
     if (!hasDistribution) {
-      console.log(`\n❌ Bot launch is not available yet. Distribute SOL first, then wait ${delayMinutes} minutes.\n`);
+      console.log(`\n❌ Volume Bot launch is not available yet. Distribute SOL for Volume Bot first, then wait ${delayMinutes} minutes.\n`);
       return;
     }
     
-    if (!canUseOtherOptions) {
-      const timeRemaining = getTimeUntilNextDistribution();
-      console.log(`\n❌ Bot launch is not available yet. ${timeRemaining} until other options are available.\n`);
+    if (!canLaunch) {
+      const timeRemaining = getTimeUntilVolumeBotDistribution();
+      console.log(`\n❌ Volume Bot launch is not available yet. ${timeRemaining} until launch is available.\n`);
+      return;
+    }
+
+    // Validate configuration before launching
+    const savedConfig = loadConfigFromFile();
+    if (!savedConfig) {
+      console.log('\n❌ Configuration file not found!');
+      console.log('Please initialize configuration first.\n');
+      return;
+    }
+
+    // Ensure global config is loaded
+    try {
+      getGlobalConfig();
+    } catch (error) {
+      console.log('\n🔄 Loading configuration...');
+      setGlobalConfig(savedConfig.config, false);
+    }
+
+    // Ask if user wants to update parameters before launching
+    const { updateParams } = await inquirer.prompt([
+      {
+        type: 'list',
+        name: 'updateParams',
+        message: 'Would you like to update Volume Bot parameters before launching?',
+        choices: [
+          { name: '🔵 Update Volume Bot parameters', value: 'volume' },
+          { name: '▶️ Launch with current parameters', value: 'launch' },
+          { name: '⬅️ Back to previous menu', value: 'back' }
+        ]
+      }
+    ]);
+
+    if (updateParams === 'volume') {
+      await updateVolumeBotConfiguration();
+      return;
+    } else if (updateParams === 'back') {
+      await manageBot();
+      return;
+    }
+
+    console.log('\n🔵 Launching Volume Bot...');
+    console.log('VolumeBot: Creates volume by buying and selling tokens\n');
+
+    // Create AbortController for stopping bot
+    botAbortController = new AbortController();
+
+    const { VolumeBot } = await import('./index');
+    isBotRunning = true;
+    currentBotType = 'Volume Bot';
+    botStartTime = new Date();
+
+    // Run Volume Bot with abort signal
+    currentBotProcess = VolumeBot(botAbortController.signal);
+
+    console.log('✅ Volume Bot started successfully!');
+    console.log('💡 Use "Stop Bot" to halt the bot when needed.\n');
+  } catch (error) {
+    console.error('❌ Error launching Volume Bot:', error);
+    isBotRunning = false;
+    currentBotType = '';
+  }
+}
+
+async function launchMarketMakerOnly() {
+  try {
+    // Check if Market Maker distribution has occurred and configured delay has passed
+    const hasDistribution = hasMarketMakerDistributionOccurred();
+    const canLaunch = hasMarketMakerDistributionTimePassed();
+    const delayMinutes = getDistributionDelayMinutes();
+    
+    if (!hasDistribution) {
+      console.log(`\n❌ Market Maker launch is not available yet. Distribute SOL for Market Maker first, then wait ${delayMinutes} minutes.\n`);
+      return;
+    }
+    
+    if (!canLaunch) {
+      const timeRemaining = getTimeUntilMarketMakerDistribution();
+      console.log(`\n❌ Market Maker launch is not available yet. ${timeRemaining} until launch is available.\n`);
+      return;
+    }
+
+    // Validate configuration before launching
+    const savedConfig = loadConfigFromFile();
+    if (!savedConfig) {
+      console.log('\n❌ Configuration file not found!');
+      console.log('Please initialize configuration first.\n');
+      return;
+    }
+
+    // Ensure global config is loaded
+    try {
+      getGlobalConfig();
+    } catch (error) {
+      console.log('\n🔄 Loading configuration...');
+      setGlobalConfig(savedConfig.config, false);
+    }
+
+    // Ask if user wants to update parameters before launching
+    const { updateParams } = await inquirer.prompt([
+      {
+        type: 'list',
+        name: 'updateParams',
+        message: 'Would you like to update Market Maker parameters before launching?',
+        choices: [
+          { name: '🟠 Update Market Maker parameters', value: 'marketmaker' },
+          { name: '▶️ Launch with current parameters', value: 'launch' },
+          { name: '⬅️ Back to previous menu', value: 'back' }
+        ]
+      }
+    ]);
+
+    if (updateParams === 'marketmaker') {
+      await updateMarketMakerConfiguration();
+      return;
+    } else if (updateParams === 'back') {
+      await manageBot();
+      return;
+    }
+
+    console.log('\n🟠 Launching Market Maker...');
+    console.log('MarketMakerForBuy: Market making operations for buying\n');
+
+    // Create AbortController for stopping bot
+    botAbortController = new AbortController();
+
+    const { MarketMakerForBuy } = await import('./index');
+    isBotRunning = true;
+    currentBotType = 'Market Maker';
+    botStartTime = new Date();
+
+    // Run Market Maker with abort signal
+    currentBotProcess = MarketMakerForBuy(botAbortController.signal);
+
+    console.log('✅ Market Maker started successfully!');
+    console.log('💡 Use "Stop Bot" to halt the bot when needed.\n');
+  } catch (error) {
+    console.error('❌ Error launching Market Maker:', error);
+    isBotRunning = false;
+    currentBotType = '';
+  }
+}
+
+async function launchBoth() {
+  try {
+    // Check if both distributions have occurred and configured delay has passed
+    const hasVolumeBotDist = hasVolumeBotDistributionOccurred();
+    const canLaunchVolumeBot = hasVolumeBotDistributionTimePassed();
+    const hasMarketMakerDist = hasMarketMakerDistributionOccurred();
+    const canLaunchMarketMaker = hasMarketMakerDistributionTimePassed();
+    const delayMinutes = getDistributionDelayMinutes();
+    
+    if (!hasVolumeBotDist || !hasMarketMakerDist) {
+      console.log(`\n❌ Both bots launch is not available yet. Distribute SOL for both first, then wait ${delayMinutes} minutes.\n`);
+      return;
+    }
+    
+    if (!canLaunchVolumeBot || !canLaunchMarketMaker) {
+      let message = '\n❌ Both bots launch is not available yet.\n';
+      if (!canLaunchVolumeBot) {
+        message += `   Volume Bot: ${getTimeUntilVolumeBotDistribution()}\n`;
+      }
+      if (!canLaunchMarketMaker) {
+        message += `   Market Maker: ${getTimeUntilMarketMakerDistribution()}\n`;
+      }
+      console.log(message);
       return;
     }
 
@@ -475,9 +870,9 @@ async function launchVolumeBot() {
         name: 'updateParams',
         message: 'Would you like to update parameters before launching?',
         choices: [
-          { name: '🔵 Update Volume Bot parameters only', value: 'volume' },
-          { name: '🟠 Update Market Maker parameters only', value: 'marketmaker' },
-          { name: '🔄 Update both Volume Bot and Market Maker parameters', value: 'both' },
+          { name: '🔵 Update Volume Bot parameters', value: 'volume' },
+          { name: '🟠 Update Market Maker parameters', value: 'marketmaker' },
+          { name: '🔄 Update both parameters', value: 'both' },
           { name: '▶️ Launch with current parameters', value: 'launch' },
           { name: '⬅️ Back to previous menu', value: 'back' }
         ]
@@ -498,8 +893,7 @@ async function launchVolumeBot() {
       return;
     }
 
-    console.log('\n🚀 Launching Volume Bot...');
-    console.log('This will start both VolumeBot and MarketMakerForBuy functions simultaneously.');
+    console.log('\n🚀 Launching Both (Volume Bot + Market Maker)...');
     console.log('VolumeBot: Creates volume by buying and selling tokens');
     console.log('MarketMakerForBuy: Market making operations for buying\n');
 
@@ -518,11 +912,11 @@ async function launchVolumeBot() {
     // Store both processes
     currentBotProcess = { volumeBot: volumeBotPromise, marketMaker: marketMakerPromise };
 
-    console.log('✅ Volume Bot and Market Maker started successfully!');
-    console.log('💡 Both functions are running in parallel');
+    console.log('✅ Both bots started successfully!');
+    console.log('💡 Volume Bot and Market Maker are running in parallel');
     console.log('💡 Use "Stop Bot" to halt both processes when needed.\n');
   } catch (error) {
-    console.error('❌ Error launching Volume Bot:', error);
+    console.error('❌ Error launching both bots:', error);
     isBotRunning = false;
     currentBotType = '';
   }
@@ -530,19 +924,19 @@ async function launchVolumeBot() {
 
 async function launchSellBot() {
   try {
-    // Check if distribution has occurred and configured delay has passed
-    const hasDistribution = hasDistributionOccurred();
-    const canUseOtherOptions = hasDistributionTimePassed();
+    // Check if Market Maker distribution has occurred and configured delay has passed
+    const hasDistribution = hasMarketMakerDistributionOccurred();
+    const canLaunch = hasMarketMakerDistributionTimePassed();
     const delayMinutes = getDistributionDelayMinutes();
     
     if (!hasDistribution) {
-      console.log(`\n❌ Sell bot launch is not available yet. Distribute SOL first, then wait ${delayMinutes} minutes.\n`);
+      console.log(`\n❌ Sell bot launch is not available yet. Distribute SOL for Market Maker first, then wait ${delayMinutes} minutes.\n`);
       return;
     }
     
-    if (!canUseOtherOptions) {
-      const timeRemaining = getTimeUntilNextDistribution();
-      console.log(`\n❌ Sell bot launch is not available yet. ${timeRemaining} until other options are available.\n`);
+    if (!canLaunch) {
+      const timeRemaining = getTimeUntilMarketMakerDistribution();
+      console.log(`\n❌ Sell bot launch is not available yet. ${timeRemaining} until launch is available.\n`);
       return;
     }
 
@@ -660,21 +1054,35 @@ async function showBotStatus() {
   console.log('==============');
   console.log(`Status: ${isBotRunning ? '🟢 Running' : '🔴 Stopped'}`);
   
-  // Show distribution status
-  const hasDistribution = hasDistributionOccurred();
-  const canUseOtherOptions = hasDistributionTimePassed();
-  const timeRemaining = getTimeUntilNextDistribution();
+  // Show distribution status for both bots
+  const hasVolumeBotDist = hasVolumeBotDistributionOccurred();
+  const canLaunchVolumeBot = hasVolumeBotDistributionTimePassed();
+  const volumeBotTimeRemaining = getTimeUntilVolumeBotDistribution();
   
-  if (!hasDistribution) {
-    console.log('Distribution: ❌ Required first');
-  } else if (canUseOtherOptions) {
-    console.log('Distribution: ✅ Available');
+  const hasMarketMakerDist = hasMarketMakerDistributionOccurred();
+  const canLaunchMarketMaker = hasMarketMakerDistributionTimePassed();
+  const marketMakerTimeRemaining = getTimeUntilMarketMakerDistribution();
+  
+  console.log('\n🔵 Volume Bot:');
+  if (!hasVolumeBotDist) {
+    console.log('  Distribution: ❌ Required first');
+  } else if (canLaunchVolumeBot) {
+    console.log('  Distribution: ✅ Launch available');
   } else {
-    console.log(`Distribution: ⏰ ${timeRemaining}`);
+    console.log(`  Distribution: ⏰ ${volumeBotTimeRemaining}`);
+  }
+  
+  console.log('\n🟠 Market Maker:');
+  if (!hasMarketMakerDist) {
+    console.log('  Distribution: ❌ Required first');
+  } else if (canLaunchMarketMaker) {
+    console.log('  Distribution: ✅ Launch available');
+  } else {
+    console.log(`  Distribution: ⏰ ${marketMakerTimeRemaining}`);
   }
   
   if (isBotRunning) {
-    console.log(`Type: ${currentBotType}`);
+    console.log(`\nCurrent Bot Type: ${currentBotType}`);
 
     if (botStartTime) {
       const now = new Date();
@@ -697,11 +1105,7 @@ async function showBotStatus() {
   }
   
   const delayMinutes = getDistributionDelayMinutes();
-  if (!hasDistribution) {
-    console.log(`💡 Distribute SOL first, then wait ${delayMinutes} minutes before other options become available`);
-  } else if (!canUseOtherOptions) {
-    console.log(`💡 Other bot options will be available after ${delayMinutes} minutes from last distribution`);
-  }
+  console.log(`\n💡 Each bot requires distribution + ${delayMinutes} min wait before launching`);
   console.log('');
 }
 
@@ -768,27 +1172,38 @@ async function collectWithSell() {
 
     console.log('✅ Collection completed!');
     
-    // Clear distribution timestamp to block bot launch until SOL is redistributed
-    clearDistributionTimestamp();
+    // Clear distribution timestamps to block bot launch until SOL is redistributed
+    clearVolumeBotDistributionTimestamp();
+    clearMarketMakerDistributionTimestamp();
     
     console.log('\n⚠️  IMPORTANT: All SOL has been collected from wallets!');
-    console.log('📌 Bot launch is now BLOCKED until you distribute SOL to wallets.\n');
+    console.log('📌 Both Volume Bot and Market Maker launch are now BLOCKED until you distribute SOL.\n');
 
     // Ask if user wants to distribute SOL now
-    const { distribute } = await inquirer.prompt([
+    const { distributeChoice } = await inquirer.prompt([
       {
-        type: 'confirm',
-        name: 'distribute',
-        message: '💰 Do you want to distribute SOL to wallets now?',
-        default: true
+        type: 'list',
+        name: 'distributeChoice',
+        message: '💰 Do you want to distribute SOL now?',
+        choices: [
+          { name: '🔵 Distribute for Volume Bot', value: 'volume' },
+          { name: '🟠 Distribute for Market Maker', value: 'market' },
+          { name: '🔄 Distribute for both', value: 'both' },
+          { name: '⬅️ Skip distribution', value: 'skip' }
+        ]
       }
     ]);
 
-    if (distribute) {
-      await distributeSolToWallets();
+    if (distributeChoice === 'volume') {
+      await distributeSolForVolumeBot();
+    } else if (distributeChoice === 'market') {
+      await distributeSolForMarketMaker();
+    } else if (distributeChoice === 'both') {
+      await distributeSolForVolumeBot();
+      await distributeSolForMarketMaker();
     } else {
-      console.log('\n📝 Remember: Bot launch is BLOCKED until you distribute SOL!');
-      console.log('   Go to "💰 Wallet & Distribution" → "📤 Distribute SOL to Wallets"\n');
+      console.log('\n📝 Remember: Bot launches are BLOCKED until you distribute SOL!');
+      console.log('   Go to "🤖 Bot Management" → Distribution options\n');
     }
   } catch (error) {
     console.error('❌ Error during collection:', error);
@@ -1039,24 +1454,31 @@ async function extendBotRuntime() {
   console.log('\n⏰ Extend Bot Runtime');
   console.log('====================\n');
 
-  // Check if distribution has occurred and configured delay has passed
-  const hasDistribution = hasDistributionOccurred();
-  const canUseOtherOptions = hasDistributionTimePassed();
-  const delayMinutes = getDistributionDelayMinutes();
-  
-  if (!hasDistribution) {
-    console.log(`❌ Bot extension is not available yet. Distribute SOL first, then wait ${delayMinutes} minutes.\n`);
-    return;
-  }
-  
-  if (!canUseOtherOptions) {
-    const timeRemaining = getTimeUntilNextDistribution();
-    console.log(`❌ Bot extension is not available yet. ${timeRemaining} until other options are available.\n`);
+  if (!isBotRunning) {
+    console.log('❌ No bot is currently running. Please start a bot first.\n');
     return;
   }
 
-  if (!isBotRunning) {
-    console.log('❌ No bot is currently running. Please start a bot first.\n');
+  // Note: Extension is only applicable for Market Maker
+  if (currentBotType !== 'Market Maker') {
+    console.log('⚠️  Runtime extension is only available for Market Maker.\n');
+    console.log(`Current bot type: ${currentBotType}\n`);
+    return;
+  }
+
+  // Check if distribution has occurred and configured delay has passed
+  const hasDistribution = hasMarketMakerDistributionOccurred();
+  const canExtend = hasMarketMakerDistributionTimePassed();
+  const delayMinutes = getDistributionDelayMinutes();
+  
+  if (!hasDistribution) {
+    console.log(`❌ Bot extension is not available yet. Distribute SOL for Market Maker first, then wait ${delayMinutes} minutes.\n`);
+    return;
+  }
+  
+  if (!canExtend) {
+    const timeRemaining = getTimeUntilMarketMakerDistribution();
+    console.log(`❌ Bot extension is not available yet. ${timeRemaining} until extension is available.\n`);
     return;
   }
 
@@ -1265,7 +1687,7 @@ async function updateVolumeBotConfiguration() {
   console.log('\n✅ Volume Bot configuration updated successfully!');
 
   // Restart the volume bot launch process
-  await launchVolumeBot();
+  await launchVolumeBotOnly();
 }
 
 async function updateMarketMakerConfiguration() {
@@ -1371,8 +1793,8 @@ async function updateMarketMakerConfiguration() {
   setGlobalConfig(updatedConfig, true);
   console.log('\n✅ Market Maker configuration updated successfully!');
 
-  // Restart the volume bot launch process (since it includes both Volume Bot and Market Maker)
-  await launchVolumeBot();
+  // Restart the market maker launch process
+  await launchMarketMakerOnly();
 }
 
 async function updateSellBotConfiguration() {

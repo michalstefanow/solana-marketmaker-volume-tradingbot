@@ -8,17 +8,24 @@ export interface SavedConfig {
   config: BotConfig;
   timestamp: number;
   version: string;
-  lastDistributionTimestamp?: number; // Timestamp of last SOL distribution
+  lastDistributionTimestamp?: number; // Timestamp of last SOL distribution (deprecated - kept for backward compatibility)
+  lastVolumeBotDistributionTimestamp?: number; // Timestamp of last Volume Bot SOL distribution
+  lastMarketMakerDistributionTimestamp?: number; // Timestamp of last Market Maker SOL distribution
 }
 
 export function saveConfiguration(config: BotConfig, preserveDistributionTimestamp: boolean = false): void {
   try {
-    // Load existing config to preserve distribution timestamp if needed
+    // Load existing config to preserve distribution timestamps if needed
     let existingDistributionTimestamp: number | undefined = undefined;
+    let existingVolumeBotTimestamp: number | undefined = undefined;
+    let existingMarketMakerTimestamp: number | undefined = undefined;
+    
     if (preserveDistributionTimestamp) {
       const existingConfig = loadConfiguration();
       if (existingConfig) {
         existingDistributionTimestamp = existingConfig.lastDistributionTimestamp;
+        existingVolumeBotTimestamp = existingConfig.lastVolumeBotDistributionTimestamp;
+        existingMarketMakerTimestamp = existingConfig.lastMarketMakerDistributionTimestamp;
       }
     }
 
@@ -26,7 +33,9 @@ export function saveConfiguration(config: BotConfig, preserveDistributionTimesta
       config,
       timestamp: Date.now(),
       version: '1.0.0',
-      lastDistributionTimestamp: existingDistributionTimestamp
+      lastDistributionTimestamp: existingDistributionTimestamp,
+      lastVolumeBotDistributionTimestamp: existingVolumeBotTimestamp,
+      lastMarketMakerDistributionTimestamp: existingMarketMakerTimestamp
     };
 
     fs.writeFileSync(CONFIG_FILE_PATH, JSON.stringify(savedConfig, null, 2));
@@ -120,6 +129,44 @@ export function updateDistributionTimestamp(): void {
   }
 }
 
+export function updateVolumeBotDistributionTimestamp(): void {
+  try {
+    const existingConfig = loadConfiguration();
+    if (!existingConfig) {
+      console.error('❌ No configuration found to update');
+      return;
+    }
+
+    const updatedConfig: SavedConfig = {
+      ...existingConfig,
+      lastVolumeBotDistributionTimestamp: Date.now()
+    };
+
+    fs.writeFileSync(CONFIG_FILE_PATH, JSON.stringify(updatedConfig, null, 2));
+  } catch (error) {
+    console.error('❌ Error updating volume bot distribution timestamp:', error);
+  }
+}
+
+export function updateMarketMakerDistributionTimestamp(): void {
+  try {
+    const existingConfig = loadConfiguration();
+    if (!existingConfig) {
+      console.error('❌ No configuration found to update');
+      return;
+    }
+
+    const updatedConfig: SavedConfig = {
+      ...existingConfig,
+      lastMarketMakerDistributionTimestamp: Date.now()
+    };
+
+    fs.writeFileSync(CONFIG_FILE_PATH, JSON.stringify(updatedConfig, null, 2));
+  } catch (error) {
+    console.error('❌ Error updating market maker distribution timestamp:', error);
+  }
+}
+
 export function hasDistributionTimePassed(): boolean {
   try {
     const savedConfig = loadConfiguration();
@@ -140,12 +187,70 @@ export function hasDistributionTimePassed(): boolean {
   }
 }
 
+export function hasVolumeBotDistributionTimePassed(): boolean {
+  try {
+    const savedConfig = loadConfiguration();
+    if (!savedConfig || !savedConfig.lastVolumeBotDistributionTimestamp) {
+      return false;
+    }
+
+    const now = Date.now();
+    const elapsed = now - savedConfig.lastVolumeBotDistributionTimestamp;
+    const delayMinutes = savedConfig.config.DISTRIBUTE_TO_RUN_DELAY_MIN || 5;
+    const delayMs = delayMinutes * 60 * 1000;
+
+    return elapsed >= delayMs;
+  } catch (error) {
+    console.error('❌ Error checking volume bot distribution time:', error);
+    return false;
+  }
+}
+
+export function hasMarketMakerDistributionTimePassed(): boolean {
+  try {
+    const savedConfig = loadConfiguration();
+    if (!savedConfig || !savedConfig.lastMarketMakerDistributionTimestamp) {
+      return false;
+    }
+
+    const now = Date.now();
+    const elapsed = now - savedConfig.lastMarketMakerDistributionTimestamp;
+    const delayMinutes = savedConfig.config.DISTRIBUTE_TO_RUN_DELAY_MIN || 5;
+    const delayMs = delayMinutes * 60 * 1000;
+
+    return elapsed >= delayMs;
+  } catch (error) {
+    console.error('❌ Error checking market maker distribution time:', error);
+    return false;
+  }
+}
+
 export function hasDistributionOccurred(): boolean {
   try {
     const savedConfig = loadConfiguration();
     return savedConfig ? savedConfig.lastDistributionTimestamp !== undefined : false;
   } catch (error) {
     console.error('❌ Error checking if distribution occurred:', error);
+    return false;
+  }
+}
+
+export function hasVolumeBotDistributionOccurred(): boolean {
+  try {
+    const savedConfig = loadConfiguration();
+    return savedConfig ? savedConfig.lastVolumeBotDistributionTimestamp !== undefined : false;
+  } catch (error) {
+    console.error('❌ Error checking if volume bot distribution occurred:', error);
+    return false;
+  }
+}
+
+export function hasMarketMakerDistributionOccurred(): boolean {
+  try {
+    const savedConfig = loadConfiguration();
+    return savedConfig ? savedConfig.lastMarketMakerDistributionTimestamp !== undefined : false;
+  } catch (error) {
+    console.error('❌ Error checking if market maker distribution occurred:', error);
     return false;
   }
 }
@@ -161,6 +266,66 @@ export function getTimeUntilNextDistribution(): string {
     const elapsed = now - savedConfig.lastDistributionTimestamp;
     const delayMinutes = savedConfig.config.DISTRIBUTE_TO_RUN_DELAY_MIN || 5; // Default to 5 minutes
     const delayMs = delayMinutes * 60 * 1000; // Convert minutes to milliseconds
+    const remaining = delayMs - elapsed;
+
+    if (remaining <= 0) {
+      return 'Available now';
+    }
+
+    const hours = Math.floor(remaining / (60 * 60 * 1000));
+    const minutes = Math.floor((remaining % (60 * 60 * 1000)) / (60 * 1000));
+
+    if (hours > 0) {
+      return `${hours}h ${minutes}m remaining`;
+    } else {
+      return `${minutes}m remaining`;
+    }
+  } catch (error) {
+    return 'Unknown';
+  }
+}
+
+export function getTimeUntilVolumeBotDistribution(): string {
+  try {
+    const savedConfig = loadConfiguration();
+    if (!savedConfig || !savedConfig.lastVolumeBotDistributionTimestamp) {
+      return 'Distribution required first';
+    }
+
+    const now = Date.now();
+    const elapsed = now - savedConfig.lastVolumeBotDistributionTimestamp;
+    const delayMinutes = savedConfig.config.DISTRIBUTE_TO_RUN_DELAY_MIN || 5;
+    const delayMs = delayMinutes * 60 * 1000;
+    const remaining = delayMs - elapsed;
+
+    if (remaining <= 0) {
+      return 'Available now';
+    }
+
+    const hours = Math.floor(remaining / (60 * 60 * 1000));
+    const minutes = Math.floor((remaining % (60 * 60 * 1000)) / (60 * 1000));
+
+    if (hours > 0) {
+      return `${hours}h ${minutes}m remaining`;
+    } else {
+      return `${minutes}m remaining`;
+    }
+  } catch (error) {
+    return 'Unknown';
+  }
+}
+
+export function getTimeUntilMarketMakerDistribution(): string {
+  try {
+    const savedConfig = loadConfiguration();
+    if (!savedConfig || !savedConfig.lastMarketMakerDistributionTimestamp) {
+      return 'Distribution required first';
+    }
+
+    const now = Date.now();
+    const elapsed = now - savedConfig.lastMarketMakerDistributionTimestamp;
+    const delayMinutes = savedConfig.config.DISTRIBUTE_TO_RUN_DELAY_MIN || 5;
+    const delayMs = delayMinutes * 60 * 1000;
     const remaining = delayMs - elapsed;
 
     if (remaining <= 0) {
@@ -197,6 +362,46 @@ export function clearDistributionTimestamp(): void {
     console.log('✅ Distribution timestamp cleared - SOL distribution required before launching bot');
   } catch (error) {
     console.error('❌ Error clearing distribution timestamp:', error);
+  }
+}
+
+export function clearVolumeBotDistributionTimestamp(): void {
+  try {
+    const existingConfig = loadConfiguration();
+    if (!existingConfig) {
+      console.error('❌ No configuration found to update');
+      return;
+    }
+
+    const updatedConfig: SavedConfig = {
+      ...existingConfig,
+      lastVolumeBotDistributionTimestamp: undefined
+    };
+
+    fs.writeFileSync(CONFIG_FILE_PATH, JSON.stringify(updatedConfig, null, 2));
+    console.log('✅ Volume Bot distribution timestamp cleared');
+  } catch (error) {
+    console.error('❌ Error clearing volume bot distribution timestamp:', error);
+  }
+}
+
+export function clearMarketMakerDistributionTimestamp(): void {
+  try {
+    const existingConfig = loadConfiguration();
+    if (!existingConfig) {
+      console.error('❌ No configuration found to update');
+      return;
+    }
+
+    const updatedConfig: SavedConfig = {
+      ...existingConfig,
+      lastMarketMakerDistributionTimestamp: undefined
+    };
+
+    fs.writeFileSync(CONFIG_FILE_PATH, JSON.stringify(updatedConfig, null, 2));
+    console.log('✅ Market Maker distribution timestamp cleared');
+  } catch (error) {
+    console.error('❌ Error clearing market maker distribution timestamp:', error);
   }
 }
 

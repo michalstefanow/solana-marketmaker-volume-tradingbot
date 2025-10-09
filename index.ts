@@ -246,8 +246,7 @@ const VolumeBot = async (abortSignal?: AbortSignal) => {
       }
       const interval = Math.floor((DISTRIBUTE_INTERVAL_MIN + Math.random() * (DISTRIBUTE_INTERVAL_MAX - DISTRIBUTE_INTERVAL_MIN)) * 1000)
 
-      data = data.splice(data.length - distritbutionNum, distritbutionNum);
-      console.log("[VOLUME BOT] data ==> ", data);
+      data = data.slice(-DISTRIBUTE_WALLET_NUM_MARKETMAKER);
 
       data.map(async ({ kp }, n) => {
 
@@ -376,14 +375,14 @@ const distributeSol = async (connection: Connection, mainKp: Keypair, distritbut
     const mainSolBal = await connection.getBalance(mainKp.publicKey)
     console.log("[VOLUME BOT] Main wallet", mainKp.publicKey.toBase58(), "balance: ", mainSolBal / 10 ** 9, "SOL")
     if (mainSolBal <= 5 * 10 ** 7) {
-      console.log("Main wallet balance is not enough")
+      console.log("[VOLUME BOT] Main wallet balance is not enough")
       return []
     }
 
     let solAmount = Math.floor(SOL_AMOUNT_TO_DISTRIBUTE * 10 ** 9 / distritbutionNum);
 
     if (mainSolBal < solAmount) {
-      console.log("Main wallet balance is not enough for distribution")
+      console.log("[VOLUME BOT] Main wallet balance is not enough for distribution. need", solAmount - mainSolBal, "Sol more.")
       return []
     }
 
@@ -466,7 +465,7 @@ const MarketMakerForBuy = async (abortSignal?: AbortSignal) => {
   console.log(`[MARKET MAKER] Wallet address: ${mainKp.publicKey.toBase58()}`)
   console.log(`[MARKET MAKER] Pool token mint: ${baseMint.toBase58()}`)
   console.log(`[MARKET MAKER] Wallet SOL balance: ${(solBalance / LAMPORTS_PER_SOL).toFixed(3)}SOL`)
-  console.log(`[MARKET MAKER] Distribute SOL to ${DISTRIBUTE_WALLET_NUM_MARKETMAKER} wallets`)
+  console.log(`[MARKET MAKER] Wallet Count is ${DISTRIBUTE_WALLET_NUM_MARKETMAKER}`)
   console.log("\n[MARKET MAKER] ============================================= \n");
 
   let data: {
@@ -486,6 +485,10 @@ const MarketMakerForBuy = async (abortSignal?: AbortSignal) => {
     console.log("[MARKET MAKER] The market_maker_data.json is not found, try again in 30 seconds...")
     return;
   }
+
+  // Get the last DISTRIBUTE_WALLET_NUM_MARKETMAKER elements from the data array
+  data = data.slice(-DISTRIBUTE_WALLET_NUM_MARKETMAKER);
+  console.log(`[MARKET MAKER] ${data.length} length of wallets list is loaded from market_maker_data.json`);
 
   // Main Iterate Part
   const totalPeriod = TOTAL_PERIOD_MIN * 60;  // ms
@@ -552,18 +555,15 @@ const MarketMakerForBuy = async (abortSignal?: AbortSignal) => {
     try {
       // buy part per wallet
       await Promise.all(data.map(async ({ kp }, n) => {
-        const randomDelayTime = Math.max(Math.round(Math.random() * 3), 1) * 1000;
+        const randomDelayTime = Math.round(Math.max(Math.random() * 3, 1) * 1000);
         console.log(`[MARKET MAKER] Random delay time: ${randomDelayTime}ms for wallet ${kp.publicKey.toBase58()}`)
         await sleep(randomDelayTime);
 
         let srcKp = kp
         const solBalance = await solanaConnection.getBalance(srcKp.publicKey);
-        console.log(`[MARKET MAKER] solBalance ==> ${solBalance / 10 ** 9} SOL`)
+        console.log(`[MARKET MAKER] ${kp.publicKey.toBase58()} solBalance ==> ${solBalance / 10 ** 9} SOL`)
 
-        // let calbuyAmount = iterator == 1 ? solBalance - 5 * 10 ** 6 : await setBuyAmount(iterator); // lamports
-        let buyAmount =  solBalance / iterationNum * (1 - (Math.random() * DISTRIBUTE_DELTA_PERFECTAGE / 100))// lamports
-        // console.log(`[MARKET MAKER] calbuyAmount ==> ${Number(calbuyAmount) / 10 ** 9} SOL`)
-        // let buyAmount = Math.round(Math.min(Number(calbuyAmount), solBalance) * (1 - (Math.random() * DISTRIBUTE_DELTA_PERFECTAGE / 100)));
+        let buyAmount =  Math.round(solBalance / iterationNum * (1 - (Math.random() * DISTRIBUTE_DELTA_PERFECTAGE / 100)))// 
         console.log(`[MARKET MAKER] buyAmount in Market Maker ==> ${buyAmount / 10 ** 9} SOL`)
 
         const minRentAmount = await getMinimumBalanceForRentExemptMint(solanaConnection, "finalized");
@@ -596,6 +596,10 @@ const MarketMakerForBuy = async (abortSignal?: AbortSignal) => {
               return
             }
             const result = await buy(srcKp, baseMint, buyAmount, false);
+            if (abortSignal?.aborted) {
+              console.log("[MARKET MAKER] Bot stopped by user request");
+              break;
+            }
             if (result) {
               break
             } else {
@@ -751,8 +755,9 @@ const MarketMakerForSell = async (abortSignal?: AbortSignal) => {
   console.log("[SELL BOT] Market maker iteration ended")
 }
 
-const distributeSolForMarketMaker = async (connection: Connection, mainKp: Keypair, distritbutionNum: number, txFeeLamports: number) => {
+const distributeSolForMarketMaker = async (connection: Connection, mainKp: Keypair, distritbutionNum: number) => {
   console.log("[MARKET MAKER] === Begin Distributing SOL for market maker ===")
+  const txFeeLamports = 5 * 10 ** 6;
   await sleep(3000);
   const data: Data[] = [];
   const wallets = []
@@ -762,19 +767,17 @@ const distributeSolForMarketMaker = async (connection: Connection, mainKp: Keypa
       ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 10_000 * FEE_LEVEL }),
       ComputeBudgetProgram.setComputeUnitLimit({ units: 12_000 * FEE_LEVEL })
     );
-    // const rentExemptAmount = await getMinimumBalanceForRentExemptAccount(connection, "confirmed");
-    // console.log("[MARKET MAKER] rentExemptAmount ==> ", rentExemptAmount)
 
     const mainSolBal = await connection.getBalance(mainKp.publicKey);
-    const requiredSolAmount = config.SOL_AMOUNT_TO_DISTRIBUTE_FOR_MARKETMAKER * 10 ** 9 + txFeeLamports * distritbutionNum;
-    let minInitialAmountLamports = await setBuyAmount(1);
-    console.log("[MARKET MAKER] minInitialAmountLamports ==> ", minInitialAmountLamports);
+    const requiredAmountLamports = config.SOL_AMOUNT_TO_DISTRIBUTE_FOR_MARKETMAKER * 10 ** 9;
 
-    if (requiredSolAmount + txFeeLamports > mainSolBal) {
-      console.log("[MARKET MAKER] Your main wallet balance is not enough. You should input at least ", requiredSolAmount + txFeeLamports / 10 ** 9, "SOL but you only input", mainSolBal / 10 ** 9, "SOL.");
+    let minInitialAmountLamports = await setBuyAmount(1);
+
+    if (requiredAmountLamports > mainSolBal) {
+      console.log("[MARKET MAKER] Your main wallet balance is not enough. You should have at least", (requiredAmountLamports) / 10 ** 9, "SOL but you only have", mainSolBal / 10 ** 9, "SOL.");
       return []
-    } else if (requiredSolAmount <= (txFeeLamports + minInitialAmountLamports) * distritbutionNum) {
-      console.log("[MARKET MAKER - Warning] To reach bonding curve. You can input at least ", (txFeeLamports + minInitialAmountLamports) * distritbutionNum / 10 ** 9 - requiredSolAmount / 10 ** 9, "more SOL later.");
+    } else if (requiredAmountLamports <= minInitialAmountLamports * distritbutionNum) {
+      console.log("[MARKET MAKER - Warning] To reach bonding curve. You can input at least ", (minInitialAmountLamports) * distritbutionNum / 10 ** 9 - requiredAmountLamports / 10 ** 9, "more SOL later.");
     } else {
       console.log("[MARKET MAKER] Main wallet balance is enough. ", mainSolBal)
     }
@@ -784,15 +787,15 @@ const distributeSolForMarketMaker = async (connection: Connection, mainKp: Keypa
     for (let i = 0; i < distritbutionNum; i++) {
       const wallet = Keypair.generate()
       let lamports = i == distritbutionNum - 1
-        ? requiredSolAmount - distrubutedSolAmount - txFeeLamports
-        : requiredSolAmount / distritbutionNum + (-1) ** Math.floor(Math.random() * 10) * Math.round(DISTRIBUTE_DELTA_PERFECTAGE * Math.random()) * 10 ** 9;
+        ? requiredAmountLamports - distrubutedSolAmount - txFeeLamports
+        : requiredAmountLamports / distritbutionNum * (1 + (-1) ** Math.floor(Math.random() * 10) * Math.round(DISTRIBUTE_DELTA_PERFECTAGE * Math.random()) / 100);
 
+      console.log("[MARKET MAKER]", wallet.publicKey.toBase58(), " lamports ==> ", lamports / 10 ** 9, "SOL")
       if (lamports <= txFeeLamports) {
         console.log("[MARKET MAKER] Lamports is not enough")
         return []
       }
 
-      console.log("[MARKET MAKER] lamports ==> ", lamports)
 
       distrubutedSolAmount += lamports;
 

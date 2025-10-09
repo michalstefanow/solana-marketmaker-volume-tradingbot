@@ -74,7 +74,6 @@ const main = async (filename: string = "") => {
             }
 
             const simResult = await connection.simulateTransaction(sellTx)
-            console.log("🚀 ~ main ~ simResult:", simResult)
 
             if (simResult.value.err) {
               console.log("Transaction simulation failed")
